@@ -1,0 +1,47 @@
+gtap,description,n_hs6,our_elasticity,paper_elasticity,diff
+OAP,Animal Products n.e.c.,45,-4.27,-4.27,0
+BT,Beverages and Tobacco products,29,-2.73,-2.73,0
+CB,Cane and Beet: sugar crops,2,-2.33,-2.33,0
+CTL,"Cattle: bovine animals, live, other ruminants",7,-6.39,-6.39,0
+CHM,Chemicals and chemical products,770,-7.83,-7.83,0
+COA,Coal: mining and agglomeration of hard coal,4,-0.21,NS,NA
+ELE,"Computer, electronic and optical products",292,-5.26,-5.26,0
+OCR,Crops n.e.c.,59,-2.87,-2.87,0
+EEQ,Electrical equipment,189,-4.62,-4.62,0
+ELY,Electricity; steam and air conditioning supply,1,-9.48,-9.48,0
+PFB,Fibres crops,17,-12.05,-12.04,-0.01
+FSH,Fishing and hunting (incl. related service activities),48,-6.64,-6.65,0.01
+OFD,Food products n.e.c.,263,-4.7,-4.70,0
+FRS,"Forestry: forestry, logging and related service activities",13,-2.53,-2.53,0
+GDT,"Gas manufacture, distribution",1,-24.14,NS,NA
+GAS,Gas: extraction of natural gas (incl. related activities),2,7.69,NS,NA
+IS,Iron and Steel: basic production and casting,216,-3.45,-3.45,0
+LEA,Leather and related products,74,-5.99,-5.99,0
+OME,Machinery and equipment n.e.c.,437,-4.23,-4.23,0
+OMT,Meat products n.e.c,48,-5.17,-5.17,0
+CMT,Meat: fresh or chilled,23,-4.04,-4.04,0
+FMP,"Metal products, except machinery and equipment",228,-4.25,-4.25,0
+MIL,Milk and dairy products,21,-4.77,-4.77,0
+MVH,"Motor vehicles, trailers and semi-trailers",62,-8.98,-8.98,0
+NFM,Non-Ferrous Metals,201,-13.39,-13.39,0
+OSD,Oil Seeds: oil seeds and oleaginous fruit,13,-2.05,-2.05,0
+OIL,Oil: extraction of crude petroleum (incl. related activities),2,-10.89,-10.89,0
+GRO,"Other Grains (maize, sorghum, barley, rye, oats, millets)",10,0.13,NS,NA
+OMF,Other Manufacturing (includes furniture),187,-4.9,-4.91,0.01
+OXT,Other Mining Extraction,87,-8.28,-8.28,0
+NMM,Other non-metallic mineral products,169,-4.83,-4.83,0
+OTN,Other transport equipment,80,-7.98,-7.98,0
+PPP,Paper and Paper Products,147,-8.18,-8.18,0
+PC,Petroleum and Coke,20,-3.64,-3.64,0
+BPH,"Pharmaceuticals, medicinal chemical and botanical products",89,-7.92,-7.92,0
+PCR,"Processed Rice: semi- or wholly milled, or husked",3,-6.46,-6.46,0
+PDR,"Rice: seed, paddy (not husked)",1,-7.63,-7.63,0
+RPP,Rubber and plastics products,149,-7.03,-7.04,0.01
+SGR,Sugar and molasses,15,-3.76,-3.76,0
+TEX,Textiles,526,-6.04,-6.04,0
+VOL,Vegetable Oils and fats,56,-2.74,-2.75,0.01
+VF,Vegetables and Fruits (incl. nuts and edible roots),84,-4.02,-4.02,0
+WAP,Wearing apparel,236,-3.84,-3.84,0
+WHT,"Wheat: seed, other",2,-2.61,-2.61,0
+LUM,"Wood, products of wood, cork (except furniture) and straw",86,-8.68,-8.69,0.01
+WOL,"Wool, silk, and other raw animal materials used in textile",36,-7.28,-7.28,0

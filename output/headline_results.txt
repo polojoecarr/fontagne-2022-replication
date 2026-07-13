@@ -1,0 +1,28 @@
+==============================================================
+ REPLICATION OF FONTAGNE, GUIMBARD & OREFICE (2022)
+ Headline product-level trade-elasticity results
+==============================================================
+
+Products attempted              : 5050 
+Tariff coef. successfully estim.: 5050 
+Dropped (collinear w/ FE)       : 0 
+
+Share of tariff coefficients statistically significant
+  at 10% level : 71.9%  (paper: 78%)
+  at  5% level : 66.8%  (paper: 72%)
+  at  1% level : 57.2%  (paper: 61%)
+
+Median t-statistic of tariff coef.: 3.06  (paper: 3.2)
+
+Mean distance elasticity (gamma_k): -1.079  (paper: distributed around -1)
+
+--- TRADE ELASTICITY epsilon_k = 1 + beta_k ------------------
+
+(A) WITH zeros  (insignificant set to 1; positives & missing dropped)
+    Paper: mean -5.5, median -4
+    Replication: mean  -5.41, median  -3.39, N = 4956
+
+(B) WITHOUT zeros  (significant & negative products only)
+    Paper: mean -9.8, median -7.3
+    Replication: mean -10.35, median  -7.56, N = 2797
+

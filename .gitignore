@@ -1,0 +1,19 @@
+# R session / IDE junk
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+.Ruserdata
+
+# OS junk
+Thumbs.db
+.DS_Store
+
+# Safety net: never commit large source datasets, should any be copied in here.
+# (The BACI, Gravity and Replic_FGO data live OUTSIDE this folder and are not
+#  part of this repo. Download them from CEPII instead.)
+*.dta
+BACI_*/
+Gravity_*/
+Replic_FGO/
+*.xlsx

@@ -1,0 +1,22 @@
+section,avg_epsilon,sd_epsilon,min_epsilon,n_total,n_negative
+I Live Animals and Animal Products,-7.51,9.06,-70.46,228,185
+II Vegetable Products,-5.95,4.06,-20.62,256,216
+III Animal or vegetable fats and oils,-8.53,8.69,-46.68,45,37
+"IV Prepared foodstuffs, beverages, tobacco",-6.17,4.5,-29.19,193,176
+V Mineral products,-18.53,17.62,-122.59,148,116
+VI Products of chemical industries,-11.84,38.16,-909.83,789,605
+VII Plastic and articles thereof,-8.39,7.19,-63.29,211,197
+"VIII Raw hides, skins, leather",-5.62,4.63,-20.16,69,53
+IX Wood/Cork and articles thereof,-8.47,8.11,-61.94,93,83
+"X Pulp of wood, cellulosic materials",-9.92,7.42,-62.84,144,131
+XI Textile and textile articles,-7.13,6.85,-51.36,801,702
+"XII Footwear, headgear, umbrellas",-3.61,2.77,-10.66,49,40
+"XIII Articles of stone, plaster, ceramic, glass",-6.62,4.19,-21.26,143,117
+"XIV Pearls, precious stones, metals",-14.17,15.24,-68.81,51,36
+XV Base metals and articles thereof,-9.59,9.75,-67.12,568,475
+XVI Machinery and electrical equipment,-6.09,5.56,-38.17,769,607
+"XVII Vehicles, aircraft, transport equipment",-10.46,8.53,-40.54,131,110
+"XVIII Optical, precision, medical instruments",-5.65,5.6,-45.94,217,148
+XIX Arms and ammunitions,-6.52,5.14,-13.65,20,17
+XX Miscellaneous,-4.85,3.42,-14.38,118,96
+XXI Works of art,-5.96,4.37,-12.18,7,7

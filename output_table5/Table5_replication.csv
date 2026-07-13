@@ -1,0 +1,22 @@
+Section,Description,Average,Std_Dev,Min,No_HS6,No_HS6_nonmissing
+I,Live Animals and Animal Products,-7.51,9.06,-70.46,228,228
+II,Vegetable Products,-5.95,4.06,-20.62,256,256
+III,Animal or vegetable fats and oils,-8.53,8.69,-46.68,45,45
+IV,"Prepared foodstuffs, beverages and tobacco",-6.17,4.5,-29.19,193,193
+V,Mineral products,-18.5,17.7,-122.59,148,146
+VI,Products of chemical industries,-10.27,10.63,-117.07,789,785
+VII,Plastic and articles thereof,-8.39,7.19,-63.29,211,211
+VIII,"Raw hides and skins, leather and article thereof",-5.62,4.63,-20.16,69,69
+IX,Wood/Cork and articles of Wood/Cork,-8.47,8.11,-61.94,93,93
+X,Pulp of wood or other cellulosic materials,-9.81,7.32,-62.84,144,143
+XI,Textile and textile articles,-7.11,6.83,-51.36,801,800
+XII,"Footwear, Headgear, Umbrellas and prepared feathers",-3.61,2.77,-10.66,49,49
+XIII,"Articles of stone, plaster, ceramic and glass",-6.62,4.19,-21.26,143,143
+XIV,Natural cultured pearls and precious stones and metals,-14.17,15.24,-68.81,51,51
+XV,Base metals and articles of base metals,-9.59,9.75,-67.12,568,568
+XVI,Machinery and mechanical appliances and electrical machinery,-6.09,5.56,-38.17,769,769
+XVII,"Vehicles, Aircraft and transport equipment",-10.46,8.53,-40.54,131,131
+XVIII,"Optical, photographic, precision and medical instruments",-5.65,5.6,-45.94,217,217
+XIX,Arms and ammunitions,-6.52,5.14,-13.65,20,20
+XX,Miscellaneous,-4.85,3.42,-14.38,118,118
+XXI,Works of art,-5.96,4.37,-12.18,7,7

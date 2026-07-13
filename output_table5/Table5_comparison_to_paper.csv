@@ -1,0 +1,22 @@
+Section,Description,Average,Std_Dev,Min,No_HS6,No_HS6_nonmissing,paper_Average,paper_Std_Dev,paper_Min,paper_nonmissing,d_Average,d_Std_Dev,d_Min,d_nonmissing
+I,Live Animals and Animal Products,-7.51,9.06,-70.46,228,228,-7.54,9.08,-70.55,222,0.03,-0.02,0.09,6
+II,Vegetable Products,-5.95,4.06,-20.62,256,256,-6.06,4.55,-37.51,251,0.11,-0.49,16.89,5
+III,Animal or vegetable fats and oils,-8.53,8.69,-46.68,45,45,-8.53,8.69,-46.7,43,0,0,0.02,2
+IV,"Prepared foodstuffs, beverages and tobacco",-6.17,4.5,-29.19,193,193,-6.17,4.5,-29.19,193,0,0,0,0
+V,Mineral products,-18.5,17.7,-122.59,148,146,-18.5,17.68,-122.97,141,0,0.02,0.38,5
+VI,Products of chemical industries,-10.27,10.63,-117.07,789,785,-10.33,10.67,-117.08,743,0.06,-0.04,0.01,42
+VII,Plastic and articles thereof,-8.39,7.19,-63.29,211,211,-8.39,7.2,-63.41,211,0,-0.01,0.12,0
+VIII,"Raw hides and skins, leather and article thereof",-5.62,4.63,-20.16,69,69,-5.59,4.67,-20.2,67,-0.03,-0.04,0.04,2
+IX,Wood/Cork and articles of Wood/Cork,-8.47,8.11,-61.94,93,93,-8.47,8.12,-61.96,93,0,-0.01,0.02,0
+X,Pulp of wood or other cellulosic materials,-9.81,7.32,-62.84,144,143,-9.93,7.42,-62.82,142,0.12,-0.1,-0.02,1
+XI,Textile and textile articles,-7.11,6.83,-51.36,801,800,-7.15,6.86,-51.42,792,0.04,-0.03,0.06,8
+XII,"Footwear, Headgear, Umbrellas and prepared feathers",-3.61,2.77,-10.66,49,49,-3.61,2.77,-10.67,46,0,0,0.01,3
+XIII,"Articles of stone, plaster, ceramic and glass",-6.62,4.19,-21.26,143,143,-6.62,4.19,-21.26,142,0,0,0,1
+XIV,Natural cultured pearls and precious stones and metals,-14.17,15.24,-68.81,51,51,-13.59,13.52,-68.81,50,-0.58,1.72,0,1
+XV,Base metals and articles of base metals,-9.59,9.75,-67.12,568,568,-9.59,9.76,-67.13,557,0,-0.01,0.01,11
+XVI,Machinery and mechanical appliances and electrical machinery,-6.09,5.56,-38.17,769,769,-6.08,5.55,-38.17,752,-0.01,0.01,0,17
+XVII,"Vehicles, Aircraft and transport equipment",-10.46,8.53,-40.54,131,131,-10.46,8.53,-40.58,129,0,0,0.04,2
+XVIII,"Optical, photographic, precision and medical instruments",-5.65,5.6,-45.94,217,217,-5.61,5.53,-45.94,208,-0.04,0.07,0,9
+XIX,Arms and ammunitions,-6.52,5.14,-13.65,20,20,-6.52,5.14,-13.65,20,0,0,0,0
+XX,Miscellaneous,-4.85,3.42,-14.38,118,118,-4.85,3.42,-14.39,117,0,0,0.01,1
+XXI,Works of art,-5.96,4.37,-12.18,7,7,-5.96,4.37,-12.18,7,0,0,0,0
