@@ -17,3 +17,8 @@ BACI_*/
 Gravity_*/
 Replic_FGO/
 *.xlsx
+
+# ETWFE working material is kept LOCAL ONLY (papers + extended-TWFE code).
+# It must never be pushed to GitHub.
+ETWFE/
+New Files/
