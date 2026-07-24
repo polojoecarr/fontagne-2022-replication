@@ -19,21 +19,29 @@ via the GTAP concordances.
 Each script is self-contained and follows the same 5-section skeleton, so they
 are easy to compare and edit. Standard errors are pair-clustered throughout.
 
-## Status (paused mid-run)
-- **Run 1** — complete (`results/results_run1_base.csv`).
-- **Run 2** — complete (`results/results_run2_etwfe.csv`).
-- **Run 3** — 12 of 14 sectors done; the two largest (`mff`, `crp`) still to
-  run. Its results CSV and the combined comparison (Run 4) will be produced on
-  resume. The scripts are resume-friendly: they skip any sector already saved.
+## Status — COMPLETE (all 14 GTAP-23 goods sectors, all three runs)
+- **Run 1** — `results/results_run1_base.csv`
+- **Run 2** — `results/results_run2_etwfe.csv`
+- **Run 3** — `results/results_run3_pairfe.csv`
+- **Combined** — `results/COMBINED_comparison_by_sector.csv` and
+  `results/COMBINED_significance_summary.csv`
 
-## Headline so far (share of the 14 sectors positive & significant)
-| Run | +sig 1% | +sig 5% | +sig 10% |
-|-----|--------:|--------:|---------:|
-| Run 1 (TWFE dummy) | 85.7% | 92.9% | 100% |
-| Run 2 (ETWFE)      | 50.0% | 50.0% | 57.1% |
+## Headline (share of the 14 sectors positive & significant)
+| Run | any positive | +sig 1% | +sig 5% | +sig 10% |
+|-----|-------------:|--------:|--------:|---------:|
+| Run 1 (TWFE dummy)          | 100%  | 85.7% | 92.9% | 100%  |
+| Run 2 (ETWFE staggered DiD) | 85.7% | 50.0% | 50.0% | 57.1% |
+| Run 3 (pair fixed effect)   | 35.7% | 14.3% | 14.3% | 14.3% |
 
-The ETWFE estimates are systematically more conservative than the plain TWFE
-dummy — the expected consequence of removing "forbidden comparisons".
+The estimated FTA effect shrinks sharply as the identification gets stricter.
+The plain TWFE dummy finds a large, almost-universally-significant positive
+effect; the ETWFE removes the "forbidden comparisons" and is far more
+conservative (two sectors even turn negative); and the pair fixed effect —
+which identifies the effect purely from within-pair change across only six
+(non-consecutive) waves — washes most of it out, leaving only `mff` and `ofd`
+positive and significant. This ordering is the expected consequence of each
+method's identification, and is exactly the comparison the three runs are
+designed to surface.
 
 ## Inputs NOT included here
 The raw source data is kept locally and is not committed:
