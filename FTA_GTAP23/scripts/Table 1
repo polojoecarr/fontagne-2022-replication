@@ -1,0 +1,165 @@
+# =====================================================================
+# Academic comparison table: FTA effects by GTAP 23 sector
+# Input : sector_comparison (already in your environment)
+# Output: gt table -> HTML / Word / LaTeX
+# =====================================================================
+
+# install.packages(c("dplyr", "tidyr", "gt"))
+library(dplyr)
+library(tidyr)
+library(gt)
+
+# ---------------------------------------------------------------------
+# 1. LABELS AND OPTIONS - the only block you should need to edit
+# ---------------------------------------------------------------------
+
+# Sector names. Anything not listed here falls back to the raw code.
+sector_labels <- c(
+  aff = "Agriculture, forestry & fishing",
+  b_t = "Beverages & tobacco",
+  crp = "Chemicals, rubber & plastics",
+  eeq = "Electronic equipment",
+  enr = "Energy & extraction",
+  mff = "Meat, fish & dairy",            # CHECK against your concordance
+  mvh = "Motor vehicles & parts",
+  ofd = "Food products nec",
+  ome = "Machinery & equipment nec",
+  omf = "Manufactures nec",
+  otn = "Transport equipment nec",
+  ppp = "Paper products & publishing",
+  prf = "Processed foods",               # CHECK against your concordance
+  tal = "Textiles, apparel & leather"
+)
+
+# Column headings for each run.
+spec_labels <- c(
+  run1 = "(1) Fontagne baseline",
+  run2 = "(2) Bilateral FE",
+  run3 = "(3) Staggered DiD"
+)
+
+# Row ordering: a numeric column name to sort by (descending), or NULL
+# to keep sectors in alphabetical order.
+sort_by <- "run1_coef"
+
+# ---------------------------------------------------------------------
+# 2. SIGNIFICANCE STARS
+#    Rebuilt from the t-statistics rather than read from the *_sig
+#    columns, so that non-significant cells come out blank instead of NA.
+#    Normal-approximation cut-offs: 1%, 5%, 10%.
+# ---------------------------------------------------------------------
+
+star <- function(t) {
+  case_when(
+    is.na(t)        ~ "",
+    abs(t) >= 2.576 ~ "***",
+    abs(t) >= 1.960 ~ "**",
+    abs(t) >= 1.645 ~ "*",
+    TRUE            ~ ""
+  )
+}
+
+# ---------------------------------------------------------------------
+# 3. RESHAPE
+#    Long by run, format each cell as text, then back to one row per
+#    sector with two columns (coefficient, |t|) per run.
+# ---------------------------------------------------------------------
+
+sector_order <- if (is.null(sort_by)) {
+  sort(sector_comparison$gtap23)
+} else {
+  sector_comparison$gtap23[order(-sector_comparison[[sort_by]])]
+}
+
+tab <- sector_comparison %>%
+  select(gtap23, matches("^run[0-9]+_(coef|t)$")) %>%
+  pivot_longer(
+    -gtap23,
+    names_to  = c("spec", ".value"),   # run1_coef -> spec = "run1", value = coef
+    names_sep = "_"
+  ) %>%
+  mutate(
+    coef_fmt = paste0(formatC(coef, format = "f", digits = 3), star(t)),
+    t_fmt    = paste0("(", formatC(abs(t), format = "f", digits = 2), ")")
+  ) %>%
+  select(gtap23, spec, coef_fmt, t_fmt) %>%
+  pivot_wider(
+    names_from  = spec,
+    values_from = c(coef_fmt, t_fmt),
+    names_glue  = "{spec}_{.value}"
+  ) %>%
+  mutate(
+    gtap23 = factor(gtap23, levels = sector_order),
+    sector = coalesce(unname(sector_labels[as.character(gtap23)]),
+                      as.character(gtap23))
+  ) %>%
+  arrange(gtap23) %>%
+  select(sector,
+         run1_coef_fmt, run1_t_fmt,
+         run2_coef_fmt, run2_t_fmt,
+         run3_coef_fmt, run3_t_fmt)
+
+# ---------------------------------------------------------------------
+# 4. BUILD THE TABLE
+# ---------------------------------------------------------------------
+
+tbl <- tab %>%
+  gt() %>%
+  tab_header(
+    title    = md("**Estimated FTA effects by GTAP 23 sector**"),
+    subtitle = "PPML gravity estimates, HS6 trade pooled to GTAP 23"
+  ) %>%
+  tab_spanner(spec_labels[["run1"]], columns = c(run1_coef_fmt, run1_t_fmt)) %>%
+  tab_spanner(spec_labels[["run2"]], columns = c(run2_coef_fmt, run2_t_fmt)) %>%
+  tab_spanner(spec_labels[["run3"]], columns = c(run3_coef_fmt, run3_t_fmt)) %>%
+  cols_label(
+    sector        = "Sector",
+    run1_coef_fmt = "Coef.", run1_t_fmt = "|t|",
+    run2_coef_fmt = "Coef.", run2_t_fmt = "|t|",
+    run3_coef_fmt = "Coef.", run3_t_fmt = "|t|"
+  ) %>%
+  cols_align("left",  columns = sector) %>%
+  cols_align("right", columns = -sector) %>%
+  tab_style(
+    style     = cell_text(weight = "bold"),
+    locations = list(cells_column_labels(), cells_column_spanners())
+  ) %>%
+  # OPTIONAL: grey out coefficients that are not significant at 10%.
+  # Delete these three lines for a plain journal-style table.
+  tab_style(cell_text(color = "#9a9a9a"),
+            cells_body(run1_coef_fmt, rows = !grepl("\\*", run1_coef_fmt))) %>%
+  tab_style(cell_text(color = "#9a9a9a"),
+            cells_body(run2_coef_fmt, rows = !grepl("\\*", run2_coef_fmt))) %>%
+  tab_style(cell_text(color = "#9a9a9a"),
+            cells_body(run3_coef_fmt, rows = !grepl("\\*", run3_coef_fmt))) %>%
+  tab_source_note(md(
+    "*Notes:* Dependent variable is bilateral trade; each cell is the FTA
+     dummy coefficient from a separate PPML regression for that sector.
+     Absolute t-statistics in parentheses.
+     *** p < 0.01, ** p < 0.05, * p < 0.10."
+  )) %>%
+  tab_options(
+    table.font.names             = c("Times New Roman", "serif"),
+    table.font.size              = px(13),
+    data_row.padding             = px(4),
+    table_body.hlines.style      = "none",          # booktabs: no inner rules
+    table.border.top.width       = px(2),
+    table.border.bottom.width    = px(2),
+    column_labels.border.top.width    = px(2),
+    column_labels.border.bottom.width = px(1),
+    heading.border.bottom.style  = "none",
+    table.border.left.style      = "none",
+    table.border.right.style     = "none",
+    source_notes.font.size       = px(11)
+  )
+
+tbl
+
+# ---------------------------------------------------------------------
+# 5. EXPORT
+# ---------------------------------------------------------------------
+
+gtsave(tbl, "sector_comparison.html")
+gtsave(tbl, "sector_comparison.docx")            # Word
+# gtsave(tbl, "sector_comparison.png")           # needs webshot2 + chromote
+# cat(as.character(as_latex(tbl)))               # LaTeX / Overleaf
