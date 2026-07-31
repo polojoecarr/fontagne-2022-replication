@@ -23,10 +23,18 @@ so services are not estimated.
 publication table (`results/Table_matched_FTA_by_GTAP23.html` / `.tex`) and the
 combined CSV. SEs are pair-clustered throughout.
 
-## Status: STAGE 1 complete
-Matched-FTA effect (baseline), share of the 14 sectors positive & significant:
-**1%: 64.3% · 5%: 64.3% · 10%: 71.4%** (85.7% positive). Effects range from
-−0.19 (Transport equipment) to +1.01 (Energy & extraction).
+## Status: STAGES 1–2 complete
+Share of the 14 sectors with a positive & significant matched-FTA effect:
+
+| Stage | +sig 1% | +sig 5% | +sig 10% |
+|---|--:|--:|--:|
+| (1) Baseline | 64.3% | 64.3% | 71.4% |
+| (2) ETWFE    | 71.4% | 78.6% | 78.6% |
+
+The **matched** FTA effects are larger and more consistently significant than
+the "complete FTA" effects were — plausible for a homogeneous set of deeper
+agreements — and the ETWFE strengthens them further (e.g. Transport equipment
+flips from −0.19 to +0.61***).
 
 ## Data / inputs (not committed)
 `regression_data_2.rds` (the matched/other FTA data) and the per-HS6
