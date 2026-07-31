@@ -1,91 +1,179 @@
-# ---- packages -----------------------------------------------------------
-library(ggplot2)
+# =====================================================================
+# Distance to UK FTA: matched vs unmatched comparator agreements
+# Restyled chart code
+# =====================================================================
+
 library(dplyr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
 library(scales)
-library(ragg)      # install.packages("ragg") if you haven't
 
-# ---- data ---------------------------------------------------------------
-plot_data <- final_distance_data %>%
-  mutate(
-    dist_from_origin = sqrt(
-      per_distance_agri_manhattan_active^2 +
-      per_distance_agri_manhattan^2
+# ---------------------------------------------------------------------
+# 0. House style
+# ---------------------------------------------------------------------
+# UK Government Analysis Function categorical palette - colour-blind safe
+# and the expected standard for published departmental analysis.
+af_blue <- "#12436D"
+af_teal <- "#28A197"
+
+group_cols <- c(Matched = af_blue, Unmatched = af_teal)
+
+theme_report <- function(base_size = 12, base_family = "") {
+  theme_minimal(base_size = base_size, base_family = base_family) +
+    theme(
+      # Left-align title/subtitle/caption to the whole plot, not the panel
+      plot.title.position   = "plot",
+      plot.caption.position = "plot",
+      plot.title    = element_text(face = "bold", size = rel(1.2),
+                                   colour = "#1A1A1A", lineheight = 1.1),
+      plot.subtitle = element_text(colour = "grey35", size = rel(0.9),
+                                   margin = margin(t = 4, b = 14)),
+      plot.caption  = element_text(colour = "grey45", size = rel(0.75),
+                                   hjust = 0, margin = margin(t = 14)),
+      axis.title.y  = element_text(colour = "grey25", size = rel(0.9),
+                                   margin = margin(r = 10)),
+      axis.text     = element_text(colour = "grey25"),
+      axis.text.x   = element_text(size = rel(1.0), face = "bold",
+                                   colour = "#1A1A1A", lineheight = 1.2),
+      axis.line.x   = element_line(colour = "grey70", linewidth = 0.3),
+      axis.ticks.x  = element_line(colour = "grey70", linewidth = 0.3),
+      panel.grid.major.y = element_line(colour = "grey92", linewidth = 0.35),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor   = element_blank(),
+      strip.text    = element_text(face = "bold", size = rel(0.95),
+                                   hjust = 0, colour = "#1A1A1A",
+                                   margin = margin(b = 6)),
+      legend.position = "none",
+      plot.margin = margin(16, 20, 12, 14)
     )
-  )
-
-xmax <- max(plot_data$per_distance_agri_manhattan_active, na.rm = TRUE) * 1.03
-ymax <- max(plot_data$per_distance_agri_manhattan,        na.rm = TRUE) * 1.03
-
-# ---- constant-distance arcs, clipped to the visible panel ---------------
-radii <- c(0.3, 0.5, 0.7, 0.9)
-
-arc_path <- function(r) {
-  th <- seq(0, pi / 2, length.out = 400)
-  d  <- data.frame(x = r * cos(th), y = r * sin(th), r = r)
-  d[d$x <= xmax & d$y <= ymax, ]
 }
 
-arcs <- bind_rows(lapply(radii, arc_path))
+# ---------------------------------------------------------------------
+# 1. Data prep - one long frame instead of three parallel column sets
+# ---------------------------------------------------------------------
+MATCH_THRESHOLD <- 0.25
 
-arc_labels <- arcs %>%                 # label at each arc's highest visible point
-  group_by(r) %>%
-  slice_max(y, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  mutate(x = x + 0.015, y = y - 0.015,
-         label = formatC(r, format = "f", digits = 1))
+sectors <- c(
+  agri     = "Agriculture and agri-food",
+  goods    = "Goods and manufacturing",
+  services = "Services"
+)
 
-# ---- plot ---------------------------------------------------------------
-p <- ggplot(plot_data, aes(x = per_distance_agri_manhattan_active,
-                           y = per_distance_agri_manhattan)) +
-  geom_path(data = arcs, aes(x = x, y = y, group = r),
-            colour = "grey80", linewidth = 0.3, linetype = "22",
-            inherit.aes = FALSE) +
-  geom_text(data = arc_labels, aes(x = x, y = y, label = label),
-            colour = "grey65", size = 2.6, hjust = 0, vjust = 1,
-            inherit.aes = FALSE) +
-  geom_point(aes(colour = dist_from_origin,
-                 size   = dist_from_origin,
-                 alpha  = dist_from_origin),
-             shape = 16) +
-  scale_colour_viridis_c(
-    option = "mako", direction = 1, begin = 0.05, end = 0.70,
-    name = "Distance\nfrom origin",
-    guide = guide_colourbar(barheight = unit(55, "pt"),
-                            barwidth  = unit(8, "pt"),
-                            ticks = FALSE, title.vjust = 1)
-  ) +
-  scale_size_continuous(range = c(3.4, 1.2), guide = "none") +
-  scale_alpha_continuous(range = c(0.95, 0.45), guide = "none") +
-  scale_x_continuous(limits = c(0, xmax), labels = label_number(accuracy = 0.01),
-                     expand = expansion(mult = 0)) +
-  scale_y_continuous(limits = c(0, ymax), labels = label_number(accuracy = 0.01),
-                     expand = expansion(mult = 0)) +
-  coord_fixed() +
-  labs(
-    title    = "FTA population distribution for agricultural sectors",
-    subtitle = "Darker, larger points sit closer to the origin; dashed arcs mark equal distance",
-    x        = "Active distance score",
-    y        = "Total distance score",
-    caption  = "Source: World Bank Contents of Deep Trade Agreements 2.0"
-  ) +
-  theme_minimal(base_size = 11) +
-  theme(
-    plot.title       = element_text(face = "bold", size = 14, margin = margin(b = 4)),
-    plot.subtitle    = element_text(colour = "grey35", size = 10, margin = margin(b = 14)),
-    plot.caption     = element_text(colour = "grey55", size = 8, hjust = 0),
-    plot.title.position = "plot",
-    axis.title       = element_text(colour = "grey30", size = 9.5),
-    axis.title.x     = element_text(margin = margin(t = 8)),
-    axis.title.y     = element_text(margin = margin(r = 8)),
-    panel.grid.minor = element_blank(),
-    panel.grid.major = element_line(colour = "grey93", linewidth = 0.3),
-    legend.title     = element_text(size = 9, colour = "grey30"),
-    legend.text      = element_text(size = 8),
-    plot.margin      = margin(16, 20, 12, 16)
+distance_long <- map_dfr(names(sectors), function(s) {
+  total  <- final_distance_data_stats[[paste0("per_distance_", s, "_manhattan")]]
+  active <- final_distance_data_stats[[paste0("per_distance_", s, "_manhattan_active")]]
+
+  tibble(
+    sector   = factor(sectors[[s]], levels = unname(sectors)),
+    distance = (total + active) / 2,
+    # Explicit factor levels - never rely on ifelse() output ordering
+    group    = factor(
+      if_else(total <= MATCH_THRESHOLD & active <= MATCH_THRESHOLD,
+              "Matched", "Unmatched"),
+      levels = c("Matched", "Unmatched")
+    )
   )
+})
 
-p
+# ---------------------------------------------------------------------
+# 2. Plot function
+# ---------------------------------------------------------------------
+plot_distance <- function(data, sector_name, title = NULL, subtitle = NULL) {
 
-# ---- export -------------------------------------------------------------
-ggsave("fta_distribution.png", p, width = 9, height = 6.5,
-       dpi = 320, device = ragg::agg_png, bg = "white")
+  d <- filter(data, sector == sector_name, !is.na(distance))
+
+  x_labs <- d %>%
+    count(group, .drop = FALSE) %>%
+    mutate(lab = sprintf("%s\n(n = %s)", group, comma(n))) %>%
+    { setNames(.$lab, .$group) }
+
+  means <- d %>%
+    group_by(group) %>%
+    summarise(mean = mean(distance), .groups = "drop")
+
+  ggplot(d, aes(group, distance, colour = group, fill = group)) +
+    # Raw observations behind the box - shows sample size and spread honestly
+    geom_jitter(width = 0.11, height = 0, size = 1.5,
+                alpha = 0.16, stroke = 0, show.legend = FALSE) +
+    geom_boxplot(width = 0.40, alpha = 0.22, linewidth = 0.45,
+                 colour = "grey25", outlier.shape = NA) +
+    # Mean marker + printed value
+    geom_point(data = means, aes(y = mean), shape = 23, size = 3.6,
+               fill = "white", stroke = 1) +
+    geom_text(data = means, aes(y = mean, label = number(mean, accuracy = 0.01)),
+              hjust = -0.75, size = 3.4, fontface = "bold") +
+    scale_colour_manual(values = group_cols) +
+    scale_fill_manual(values = group_cols) +
+    scale_y_continuous(
+      # Distance is a ratio-scale metric, so a zero baseline is meaningful
+      limits = c(0, NA),
+      breaks = pretty_breaks(6),
+      labels = number_format(accuracy = 0.1),
+      expand = expansion(mult = c(0, 0.08))
+    ) +
+    scale_x_discrete(labels = x_labs) +
+    labs(
+      title    = title %||% sprintf("Matched comparators sit much closer to the UK FTA\u2019s %s content",
+                                    tolower(sector_name)),
+      subtitle = subtitle %||% paste0(
+        "Mean of active and total Manhattan distance to the UK FTA. ",
+        "White diamond = group mean; box = median and interquartile range."
+      ),
+      x = NULL,
+      y = "Distance to UK FTA",
+      caption = paste0(
+        "Matched group = active and total distance both at or below ",
+        MATCH_THRESHOLD, ". Lower values indicate closer policy content.\n",
+        "Source: World Bank Contents of Deep Trade Agreements 2.0; author calculations."
+      )
+    ) +
+    theme_report()
+}
+
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+# ---------------------------------------------------------------------
+# 3. Individual charts
+# ---------------------------------------------------------------------
+p_agri     <- plot_distance(distance_long, "Agriculture and agri-food")
+p_goods    <- plot_distance(distance_long, "Goods and manufacturing")
+p_services <- plot_distance(distance_long, "Services")
+
+p_agri
+
+# ---------------------------------------------------------------------
+# 4. All three sectors on one panel (better for a paper or slide)
+# ---------------------------------------------------------------------
+panel_labs <- distance_long %>%
+  count(sector, group) %>%
+  mutate(lab = sprintf("%s\n(n = %s)", group, comma(n)))
+
+p_all <- ggplot(distance_long, aes(group, distance, colour = group, fill = group)) +
+  geom_jitter(width = 0.11, height = 0, size = 1.3, alpha = 0.14, stroke = 0) +
+  geom_boxplot(width = 0.40, alpha = 0.22, linewidth = 0.45,
+               colour = "grey25", outlier.shape = NA) +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 3.2,
+               fill = "white", stroke = 0.9) +
+  scale_colour_manual(values = group_cols) +
+  scale_fill_manual(values = group_cols) +
+  scale_y_continuous(limits = c(0, NA), breaks = pretty_breaks(5),
+                     labels = number_format(accuracy = 0.1),
+                     expand = expansion(mult = c(0, 0.08))) +
+  facet_wrap(~ sector, nrow = 1) +
+  labs(
+    title    = "Matching substantially narrows the distance to the UK FTA in every sector group",
+    subtitle = "Mean of active and total Manhattan distance | white diamond = group mean",
+    x = NULL, y = "Distance to UK FTA",
+    caption = paste0("Matched group = active and total distance both at or below ",
+                     MATCH_THRESHOLD, ". Lower values indicate closer policy content.")
+  ) +
+  theme_report()
+
+p_all
+
+# ---------------------------------------------------------------------
+# 5. Export at a fixed size so text scales predictably
+# ---------------------------------------------------------------------
+# ggsave("agri_distance.png", p_agri, width = 8, height = 5, dpi = 320, bg = "white")
+# ggsave("all_sectors_distance.png", p_all, width = 11, height = 4.6, dpi = 320, bg = "white")
