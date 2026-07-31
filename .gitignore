@@ -22,3 +22,7 @@ Replic_FGO/
 # It must never be pushed to GitHub.
 ETWFE/
 New Files/
+
+# Local data objects (e.g. regression_data*.rds) are kept on the machine only
+# and must never be pushed to GitHub.
+*.rds
