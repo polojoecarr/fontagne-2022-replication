@@ -1,0 +1,214 @@
+## ============================================================================
+## STAGE 1 -- MATCHED-FTA IMPACT BY GTAP-23 SECTOR   (baseline Fontagne)
+## ============================================================================
+##
+## *** SECOND MATCHED TABLE (the regression_data_3 table) ***
+##   Identical in every respect to the first matched table in
+##   FTA_matched_GTAP23/, EXCEPT that the matched/other split is taken from
+##   regression_data_3.rds instead of regression_data_2.rds. The _3 matched
+##   group is roughly half the size (goods 1,280 vs 2,326 treated pair-years;
+##   agri 990 vs 2,188), i.e. a tighter, more homogeneous treatment group.
+##
+##   Only THREE specifications are estimated for this table:
+##     (1) Baseline Fontagne, (3) Bilateral FE, (4) ETWFE + Bilateral FE.
+##   Specification (2) (ETWFE with gravity controls) is deliberately NOT run.
+##
+##   Working outputs -> ETWFE/FTA_matched2_GTAP23_Outputs/
+##   Published table -> FTA_matched2_GTAP23/
+##
+## WHAT THIS DOES
+##   Same as the earlier "Run 1 - Base Fontagne", but the treatment is now the
+##   MATCHED FTA variable (a homogeneous set of similar agreements), with the
+##   OTHER (unmatched) FTA group kept as a time-varying CONTROL DUMMY.
+##
+##   Three mutually-exclusive groups (per pair-year):
+##     * FTA_matched = 1  -> the treatment we report
+##     * FTA_other   = 1  -> control dummy (a different, non-matched FTA)
+##     * both 0           -> no FTA at all (the baseline / never-treated)
+##
+##   The matched/other split is defined SEPARATELY for agriculture and goods
+##   (manufacturing) in the DTA data. HS6 is merchandise only, so:
+##     * agri sectors  (aff, b_t, ofd, prf) use the *_agri  variables
+##     * goods sectors (everything else)    use the *_goods variables
+##
+## ESTIMATING EQUATION (per GTAP-23 sector, pooling its HS6 products):
+##   v_ijk,t = exp[ beta * FTA_matched_ij,t        <- reported effect
+##                + gamma * FTA_other_ij,t          <- control dummy
+##                + rho * ln(1+tariff) + gravity controls
+##                + exporter x year x HS6 FE + importer x year x HS6 FE ] * err
+## ============================================================================
+
+
+## ============================================================================
+## SECTION 1 -- ENVIRONMENT, PACKAGES AND FILE PATHS
+## ============================================================================
+user_lib <- Sys.getenv("R_LIBS_USER"); if (nzchar(user_lib)) .libPaths(c(user_lib, .libPaths()))
+library(data.table); library(fixest); library(dplyr); library(tidyr); library(readr); library(stringr)
+setFixest_nthreads(parallel::detectCores())
+
+project_root <- "C:/Claude Code Project Folder/Fontange 2022"
+sigma_dir    <- file.path(project_root, "Replic_FGO", "Replic_FGO")
+etwfe_dir    <- file.path(project_root, "R_Replication", "ETWFE")
+rd3_path     <- file.path(project_root, "R_Replication", "regression_data_3.rds")
+out_dir      <- file.path(etwfe_dir, "FTA_matched2_GTAP23_Outputs", "stage1_base")
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+waves <- c(2001, 2004, 2007, 2010, 2013, 2016)
+
+
+## ============================================================================
+## SECTION 2 -- INPUTS: CONCORDANCE, SECTOR TYPE, AND THE MATCHED/OTHER LOOKUP
+## ============================================================================
+
+## ---- 2a. HS6 -> GTAP23, and which sectors are "agriculture" -----------------
+hs6_to_g65 <- read_csv(file.path(etwfe_dir, "GTAP to HS6 (1).csv"), show_col_types = FALSE) |>
+  transmute(hs6 = str_pad(as.character(Code), 6, pad = "0"),
+            gtap65 = tolower(trimws(GSEC3_rev_lower_case)))
+g65_to_g23 <- read_csv(file.path(etwfe_dir, "GTAP 65 to GTAP 23 Concordence (1).csv"), show_col_types = FALSE) |>
+  transmute(gtap65 = tolower(trimws(`Full Disaggregation`)), gtap23 = tolower(trimws(GTAP23))) |>
+  filter(!is.na(gtap65))
+hs6_gtap23 <- hs6_to_g65 |> left_join(g65_to_g23, by = "gtap65") |>
+  filter(!is.na(gtap23)) |> distinct(hs6, gtap23)
+
+## agri sectors draw from the *_agri FTA variables, all others from *_goods
+agri_sectors <- c("aff", "b_t", "ofd", "prf")
+
+gtap_sectors <- hs6_gtap23 |> count(gtap23, name = "n") |> arrange(n) |> pull(gtap23)
+gtap_groups  <- split(hs6_gtap23$hs6, hs6_gtap23$gtap23)
+
+## ---- 2b. Build the matched/other lookup from regression_data_2 --------------
+## Careful data-matching notes (verified):
+##   * the file contains ONLY pair-years that have some FTA; every row has
+##     exactly one of matched/other = 1. Pairs absent from the file are
+##     genuinely no-FTA -> after the merge, NA becomes 0 for both dummies.
+##   * it is directed-symmetric; we symmetrize defensively (no conflicts).
+##   * ISO3 codes and year are trimmed / coerced so the keys line up with the
+##     trade data (which uses ISO3 exporter i / importer j and integer year).
+rd <- as.data.table(readRDS(rd3_path))
+setnames(rd, c("exporter_iso3", "importer_iso3"), c("i", "j"))
+rd <- rd[year %in% waves,
+         .(i = toupper(trimws(i)), j = toupper(trimws(j)), year = as.integer(year),
+           m_agri  = as.integer(FTA_matched_agri),  o_agri  = as.integer(FTA_other_agri),
+           m_goods = as.integer(FTA_matched_goods), o_goods = as.integer(FTA_other_goods))]
+fta_lookup <- unique(rbind(
+  rd,
+  rd[, .(i = j, j = i, year, m_agri, o_agri, m_goods, o_goods)]))   # symmetrize (both directions)
+
+
+## ============================================================================
+## SECTION 3 -- THE PER-SECTOR ESTIMATOR
+## ============================================================================
+estimate_sector <- function(sector) {
+
+  type <- if (sector %in% agri_sectors) "agri" else "goods"
+
+  ## read & pool the sector's HS6 files
+  hs6_list <- gtap_groups[[sector]]
+  read_one <- function(h) {
+    f <- file.path(sigma_dir, paste0("Sigma_HS6_", h, ".csv"))
+    d <- tryCatch(fread(f, sep = ";"), error = function(e) NULL)
+    if (is.null(d) || nrow(d) == 0L) return(NULL)
+    d[, hs6 := h]; d
+  }
+  dt <- rbindlist(lapply(hs6_list, read_one), use.names = TRUE, fill = TRUE)
+  if (is.null(dt) || nrow(dt) == 0L)
+    return(data.table(gtap23 = sector, type = type, matched_coef = NA_real_, matched_SE = NA_real_,
+                      other_coef = NA_real_, other_SE = NA_real_, tariff_coef = NA_real_,
+                      n_hs6 = 0L, nobs = 0L, matched_share = NA_real_, status = "read_error"))
+
+  ## attach the matched / other dummies for this sector's TYPE (agri or goods)
+  L <- fta_lookup[, .(i, j, year,
+                      FTA_matched = get(paste0("m_", type)),
+                      FTA_other   = get(paste0("o_", type)))]
+  dt <- merge(dt, L, by = c("i", "j", "year"), all.x = TRUE)
+  dt[is.na(FTA_matched), FTA_matched := 0L]      # pair-years not in the file = no FTA
+  dt[is.na(FTA_other),   FTA_other   := 0L]
+
+  ## Fontagne cleaning
+  dt[is.na(v), v := 0]
+  dt[, ln_tariff := log(ADV + 1)]
+  dt[, l_distw   := log(DISTW)]
+  dt[, flag := sum(v), by = .(i, hs6)]; dt <- dt[flag != 0]
+
+  matched_share <- mean(dt$FTA_matched)
+  if (nrow(dt) == 0L || uniqueN(dt$FTA_matched) < 2)
+    return(data.table(gtap23 = sector, type = type, matched_coef = NA_real_, matched_SE = NA_real_,
+                      other_coef = NA_real_, other_SE = NA_real_, tariff_coef = NA_real_,
+                      n_hs6 = uniqueN(dt$hs6), nobs = nrow(dt), matched_share = matched_share,
+                      status = "no_variation"))
+
+  ## the regression (baseline Fontagne; matched treatment + other control)
+  m <- tryCatch(
+    fepois(v ~ FTA_matched + FTA_other + ln_tariff + l_distw + COLONY + CONTIG + COMLANG_OFF |
+             i^year^hs6 + j^year^hs6,
+           data = dt, cluster = ~ i^j, warn = FALSE, notes = FALSE),
+    error = function(e) NULL)
+
+  if (is.null(m) || !("FTA_matched" %in% names(coef(m))))
+    return(data.table(gtap23 = sector, type = type, matched_coef = NA_real_, matched_SE = NA_real_,
+                      other_coef = NA_real_, other_SE = NA_real_, tariff_coef = NA_real_,
+                      n_hs6 = uniqueN(dt$hs6), nobs = nrow(dt), matched_share = matched_share,
+                      status = "dropped"))
+
+  ct <- summary(m)$coeftable
+  g <- function(v, col) if (v %in% rownames(ct)) ct[v, col] else NA_real_
+  data.table(
+    gtap23       = sector, type = type,
+    matched_coef = g("FTA_matched", "Estimate"), matched_SE = g("FTA_matched", "Std. Error"),
+    other_coef   = g("FTA_other",   "Estimate"), other_SE   = g("FTA_other",   "Std. Error"),
+    tariff_coef  = g("ln_tariff",   "Estimate"),
+    n_hs6 = uniqueN(dt$hs6), nobs = m$nobs, matched_share = matched_share, status = "ok")
+}
+
+
+## ============================================================================
+## SECTION 4 -- RUN ALL SECTORS SEQUENTIALLY (fepois multithreaded)
+## ============================================================================
+t_start <- Sys.time()
+for (sec in gtap_sectors) {
+  target <- file.path(out_dir, paste0("run_", sec, ".rds"))
+  if (file.exists(target)) next
+  out <- estimate_sector(sec)
+  saveRDS(out, target)
+  cat(format(Sys.time(), "%H:%M"), "-", sec, "(", out$type, ") ->", out$status,
+      "| matched:", round(out$matched_coef, 3), "| matched share:", round(out$matched_share, 4), "\n")
+  flush.console(); gc()
+}
+cat("\nStage 1 done in", round(as.numeric(Sys.time() - t_start, units = "mins"), 1), "minutes.\n")
+
+results <- rbindlist(lapply(list.files(out_dir, "^run_.*\\.rds$", full.names = TRUE), readRDS))
+
+
+## ============================================================================
+## SECTION 5 -- RESULTS TABLE + SIGNIFICANCE SUMMARY
+## ============================================================================
+z_1 <- 2.576; z_5 <- 1.960; z_10 <- 1.645
+results_table <- results |> as_tibble() |>
+  mutate(t_stat = abs(matched_coef / matched_SE),
+         positive = matched_coef > 0,
+         sig_1pct = !is.na(t_stat) & t_stat > z_1,
+         sig_5pct = !is.na(t_stat) & t_stat > z_5,
+         sig_10pct = !is.na(t_stat) & t_stat > z_10,
+         pos_sig_1pct = positive & sig_1pct, pos_sig_5pct = positive & sig_5pct,
+         pos_sig_10pct = positive & sig_10pct) |>
+  arrange(gtap23) |>
+  select(gtap23, type, matched_coef, matched_SE, t_stat, other_coef, other_SE,
+         positive, sig_1pct, sig_5pct, sig_10pct,
+         pos_sig_1pct, pos_sig_5pct, pos_sig_10pct, matched_share, nobs, status)
+write_csv(results_table, file.path(out_dir, "results_stage1_base.csv"))
+
+summary_stage1 <- tibble(
+  run = "Stage 1: Baseline (matched FTA)",
+  sectors_estimated = sum(results_table$status == "ok"),
+  pct_positive      = round(100 * mean(results_table$positive, na.rm = TRUE), 1),
+  pct_pos_sig_1pct  = round(100 * mean(results_table$pos_sig_1pct, na.rm = TRUE), 1),
+  pct_pos_sig_5pct  = round(100 * mean(results_table$pos_sig_5pct, na.rm = TRUE), 1),
+  pct_pos_sig_10pct = round(100 * mean(results_table$pos_sig_10pct, na.rm = TRUE), 1))
+write_csv(summary_stage1, file.path(out_dir, "summary_stage1_base.csv"))
+
+cat("\n============ STAGE 1 (matched FTA, baseline) ============\n")
+print(as.data.frame(results_table |>
+        select(gtap23, type, matched_coef, matched_SE, t_stat, sig_1pct, sig_5pct, sig_10pct)),
+      row.names = FALSE)
+cat("\nMatched FTA effect positive & significant:\n")
+cat(sprintf("  1%%: %.1f%%   5%%: %.1f%%   10%%: %.1f%%\n",
+            summary_stage1$pct_pos_sig_1pct, summary_stage1$pct_pos_sig_5pct, summary_stage1$pct_pos_sig_10pct))

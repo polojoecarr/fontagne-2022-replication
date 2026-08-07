@@ -1,0 +1,48 @@
+\begin{table}[t]
+\caption*{
+{\fontsize{20}{25}\selectfont  \textbf{The effect of \emph{matched} FTAs on trade, by GTAP-23 sector}\fontsize{10}{12}\selectfont } \\ 
+{\fontsize{14}{17}\selectfont  \emph{Narrow matched definition (regression\_data\_3); PPML gravity (HS6 pooled to GTAP-23); matched-FTA treatment, other-FTA control; dep. var. = bilateral trade}\fontsize{10}{12}\selectfont }
+} 
+\fontsize{10.0pt}{12.0pt}\selectfont
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}l|c}
+\toprule
+ & {\bfseries (1) Baseline} \\ 
+\midrule\addlinespace[2.5pt]
+\multicolumn{2}{l}{{\itshape \bfseries A. Matched-FTA effect by GTAP-23 sector}} \\[2.5pt] 
+\midrule\addlinespace[2.5pt]
+Meat \& processed foods (agri) & \shortstack[l]{1.267*** \\(0.201)} \\ 
+Textiles, apparel \& leather & \shortstack[l]{0.738*** \\(0.150)} \\ 
+Motor vehicles \& parts & \shortstack[l]{0.707*** \\(0.220)} \\ 
+Agriculture, forestry \& fishing (agri) & \shortstack[l]{0.672*** \\(0.118)} \\ 
+Metal \& other materials & \shortstack[l]{0.455*** \\(0.120)} \\ 
+Machinery \& equipment nec & \shortstack[l]{0.379*** \\(0.126)} \\ 
+Energy \& extraction & \shortstack[l]{0.360* \\(0.201)} \\ 
+Food products nec (agri) & \shortstack[l]{0.276** \\(0.111)} \\ 
+Manufactures nec & \shortstack[l]{0.247* \\(0.128)} \\ 
+Electronic equipment & \shortstack[l]{0.215 \\(0.137)} \\ 
+Paper products \& publishing & \shortstack[l]{0.202 \\(0.152)} \\ 
+Transport equipment nec & \shortstack[l]{0.143 \\(0.146)} \\ 
+Chemicals, rubber \& plastics & \shortstack[l]{0.019 \\(0.107)} \\ 
+Beverages \& tobacco (agri) & \shortstack[l]{-0.205 \\(0.284)} \\ 
+\midrule\addlinespace[2.5pt]
+\multicolumn{2}{l}{{\itshape \bfseries B. Specification}} \\[2.5pt] 
+\midrule\addlinespace[2.5pt]
+ETWFE (staggered DiD) & No \\ 
+Gravity controls & Yes \\ 
+Bilateral (pair) fixed effect & No \\ 
+Other-FTA control dummy & Yes \\ 
+Exporter/importer x year x HS6 FE & Yes \\ 
+\midrule\addlinespace[2.5pt]
+\multicolumn{2}{l}{{\itshape \bfseries C. Share of sectors positive and significant}} \\[2.5pt] 
+\midrule\addlinespace[2.5pt]
+... at 1\% & 42.9\% \\ 
+... at 5\% & 50.0\% \\ 
+... at 10\% & 64.3\% \\ 
+\bottomrule
+\end{tabular*}
+\begin{minipage}{\linewidth}
+\vspace{.05em}
+\emph{Notes:} Each column is a separate specification; each Panel-A cell is the average effect of a \textbf{matched} FTA for that sector (Poisson PML on the pooled HS6 products), with the \textbf{other} (unmatched) FTA group entering as a time-varying control and no-FTA pairs as the baseline. Agri sectors use the agriculture FTA split, the rest use the goods split. Coefficients are semi-elasticities; clustered (country-pair) SEs in parentheses. *** p\textless{}0.01, ** p\textless{}0.05, * p\textless{}0.10.\\
+\end{minipage}
+\end{table}
+
