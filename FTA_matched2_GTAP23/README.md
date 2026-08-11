@@ -35,7 +35,30 @@ two can be read side by side.
 |---|---|--:|
 | (1) Baseline | **complete**, 14/14 sectors | 72.4 min |
 | (3) Bilateral FE | **complete**, 14/14 sectors | 258.5 min |
-| (4) ETWFE + Bilateral FE | not yet run | est. ~8.7 h in 4 chunks |
+| (4) ETWFE + Bilateral FE | **chunks 1-2 done**, 12/14 sectors (`mff`, `crp` pending) | 177.4 + 132.1 min |
+
+### Stage 4 so far (12 of 14 sectors)
+Stage 4 is run in chunks; `mff` and `crp` are still outstanding, so its column
+in the table is **provisional** and its Panel-C shares are computed over the 12
+sectors available. The table's own "Coverage" source note states this and
+self-corrects once the remaining chunks finish.
+
+The result that matters: **meat & processed foods (`prf`) survives the full
+specification at 0.313\*\* (t = 2.26)**. It weakens from Stage 3's 0.444\*\*\*
+but stays positive and significant at 5% once treatment timing is handled by the
+ETWFE block on top of the pair fixed effect. In the first (`_2`) matched table
+**no** sector survived this specification at any level, so this is the clearest
+substantive difference the narrow matched definition produces.
+
+The thin-cohort worry raised before the run did not materialise in the way
+feared: **all 15 cohort-year cells were estimated in every sector**, with none
+dropped for collinearity. Standard errors widen relative to Stage 3 but remain
+usable.
+
+Of the remaining 11 estimated sectors, only `eeq` (0.077) is even positive.
+Three are significantly negative — `tal` -0.409\*\*\*, `omf` -0.260\*\*\*, and
+`otn` -0.409\* — and textiles is again the caution: +0.738\*\*\* in the baseline,
+-0.262\*\*\* under pair FE, -0.409\*\*\* under ETWFE + pair FE.
 
 ### Share of the 14 sectors with a positive & significant matched effect
 | Stage | any positive | +sig 1% | +sig 5% | +sig 10% |

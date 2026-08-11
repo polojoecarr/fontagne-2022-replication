@@ -67,6 +67,8 @@ panelC <- tibble(rowlab=c("... at 1%","... at 5%","... at 10%"),
                  !!!setNames(lapply(tags, function(tg) sapply(c(2.576,1.960,1.645), \(z) sps(tg,z))), tags)) |>
   mutate(panel="C. Share of sectors positive and significant")
 
+n_estimated <- sapply(tags, function(tg) sum(!is.na(sc[[paste0(tg, "_coef")]])))
+
 body <- bind_rows(panelA, panelB, panelC)
 tbl <- body |> gt(groupname_col="panel", rowname_col="rowlab") |>
   tab_header(title = md("**The effect of *matched* FTAs on trade, by GTAP-23 sector**"),
@@ -77,6 +79,11 @@ tbl <- body |> gt(groupname_col="panel", rowname_col="rowlab") |>
   tab_style(cell_text(weight="bold"), locations=list(cells_column_labels(), cells_row_groups())) |>
   tab_style(cell_text(style="italic"), locations=cells_row_groups()) |>
   tab_source_note(md("*Notes:* Each column is a separate specification; each Panel-A cell is the average effect of a **matched** FTA for that sector (Poisson PML on the pooled HS6 products), with the **other** (unmatched) FTA group entering as a time-varying control and no-FTA pairs as the baseline. Agri sectors use the agriculture FTA split, the rest use the goods split. Coefficients are semi-elasticities; clustered (country-pair) SEs in parentheses. *** p<0.01, ** p<0.05, * p<0.10.")) |>
+  ## Completeness note: Stage 4 is run in chunks, so a column can be partial.
+  ## This line reports sectors estimated per column and self-corrects when full.
+  tab_source_note(md(paste0("*Coverage:* ",
+    paste(sprintf("%s = %d of 14 sectors", stage_meta$label, n_estimated), collapse = "; "),
+    ". Where a column is incomplete the blank rows are not yet estimated, and the Panel-C shares for that column are computed over the sectors available."))) |>
   tab_options(table.font.names=c("Times New Roman","serif"), table.font.size=px(13),
               data_row.padding=px(3), table_body.hlines.style="none",
               table.border.top.width=px(2), table.border.bottom.width=px(2),
