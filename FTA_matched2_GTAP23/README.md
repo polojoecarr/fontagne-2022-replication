@@ -35,11 +35,11 @@ two can be read side by side.
 |---|---|--:|
 | (1) Baseline | **complete**, 14/14 sectors | 72.4 min |
 | (3) Bilateral FE | **complete**, 14/14 sectors | 258.5 min |
-| (4) ETWFE + Bilateral FE | **chunks 1-2 done**, 12/14 sectors (`mff`, `crp` pending) | 177.4 + 132.1 min |
+| (4) ETWFE + Bilateral FE | **chunks 1-3 done**, 13/14 sectors (`crp` pending) | 177.4 + 132.1 + 112.4 min |
 
-### Stage 4 so far (12 of 14 sectors)
-Stage 4 is run in chunks; `mff` and `crp` are still outstanding, so its column
-in the table is **provisional** and its Panel-C shares are computed over the 12
+### Stage 4 so far (13 of 14 sectors)
+Stage 4 is run in chunks; only `crp` is still outstanding, so its column
+in the table is **provisional** and its Panel-C shares are computed over the 13
 sectors available. The table's own "Coverage" source note states this and
 self-corrects once the remaining chunks finish.
 
@@ -55,7 +55,8 @@ feared: **all 15 cohort-year cells were estimated in every sector**, with none
 dropped for collinearity. Standard errors widen relative to Stage 3 but remain
 usable.
 
-Of the remaining 11 estimated sectors, only `eeq` (0.077) is even positive.
+Of the remaining 12 estimated sectors, only `eeq` (0.077) is even positive;
+`mff` came in at -0.076 (t = 0.80), insignificant.
 Three are significantly negative — `tal` -0.409\*\*\*, `omf` -0.260\*\*\*, and
 `otn` -0.409\* — and textiles is again the caution: +0.738\*\*\* in the baseline,
 -0.262\*\*\* under pair FE, -0.409\*\*\* under ETWFE + pair FE.
