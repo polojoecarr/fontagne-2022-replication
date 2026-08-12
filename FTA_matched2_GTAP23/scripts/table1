@@ -1,0 +1,345 @@
+# =============================================================================
+# AVE comparison charts — Non-Empirical vs Gravity Controls vs Bilateral FE
+#
+# SECTION 0 : shared setup (data prep, palette, theme, scales, export helper)
+# SECTION 1 : three-panel chart, original structure + fixes and polish only
+# SECTION 2 : OPTION 1 — single-panel dumbbell, colour = specification
+# SECTION 3 : OPTION 2 — three linked panels, colour = specification
+#
+# Sections 1-3 are independent: run SECTION 0 first, then whichever you want.
+# =============================================================================
+
+library(dplyr)
+library(forcats)
+library(ggplot2)
+library(scales)
+library(patchwork)
+library(ragg)
+
+
+# =============================================================================
+# SECTION 0 — SHARED SETUP
+# =============================================================================
+
+## ---- 0.1 Palette ------------------------------------------------------------
+# UK Government Analysis Function categorical palette
+af_blue   <- "#12436D"   # dark blue
+af_teal   <- "#28A197"   # turquoise
+af_pink   <- "#801650"   # dark pink   (was #181650 in the old script — typo)
+af_orange <- "#F46A25"   # orange
+
+af_pal <- c(af_blue, af_teal, af_pink, af_orange)
+
+# Broad sector (Agri removed) — used in SECTION 1 only
+sector_cols <- c("Manufacturing" = af_teal,
+                 "Services"      = af_orange)
+
+# Specification — used in SECTIONS 2 and 3
+spec_levels <- c("Previous method (non-empirical)",
+                 "Gravity controls",
+                 "Bilateral FE")
+
+spec_cols <- setNames(c(af_blue, af_teal, af_orange), spec_levels)
+
+# Font. Leave as "" to use the device default; set to e.g. "Arial" if the font
+# is installed on the machine, so output is identical across environments.
+chart_font <- ""
+
+## ---- 0.2 Data-prep helper (regression tables) -------------------------------
+prep_ave <- function(df) {
+  df %>%
+    filter(variable %in% c("FTA_matched_goods",          # agri dropped
+                           "FTA_matched_services")) %>%
+    left_join(GTAP_labels, by = c("GTAP_65" = "Code")) %>%
+    filter(!is.na(Label)) %>%
+    mutate(
+      broad_sector_flag = case_when(
+        version > 26 & version <= 45 ~ "Manufacturing",
+        version > 45                 ~ "Services",
+        TRUE                         ~ NA_character_
+      )
+    ) %>%
+    filter(!is.na(broad_sector_flag))
+}
+
+grav <- prep_ave(results_table_gravity)      %>% mutate(spec = "Gravity controls")
+bila <- prep_ave(results_table_bilateral_FE) %>% mutate(spec = "Bilateral FE")
+
+## ---- 0.3 Old NTM AVE assumptions --------------------------------------------
+# GTAP_65 -> version -> broad-sector lookup, taken from the results table
+sector_meta <- results_table_gravity %>%
+  distinct(GTAP_65, version) %>%
+  mutate(
+    broad_sector_flag = case_when(
+      version <= 26                ~ "Agri",
+      version > 26 & version <= 45 ~ "Manufacturing",
+      version > 45                 ~ "Services",
+      TRUE                         ~ NA_character_
+    )
+  )
+
+old_ntm <- Old_NTMs %>%
+  # 'Exports' is now numeric. Assumed to be on a percentage scale (e.g. -2.98).
+  # If it is already stored as a proportion (e.g. -0.0298), use AVE = Exports.
+  mutate(AVE = Exports / 100) %>%
+  left_join(sector_meta, by = "GTAP_65") %>%
+  left_join(GTAP_labels, by = c("GTAP_65" = "Code")) %>%
+  filter(!is.na(Label)) %>%
+  filter(!is.na(broad_sector_flag), broad_sector_flag != "Agri") %>%
+  mutate(spec = "Previous method (non-empirical)")
+
+## ---- 0.4 Outlier rule and shared sector ordering ----------------------------
+# Deliberate outlier rule: drop |AVE| > 1. This is a data decision and is
+# separate from the display window set by coord_cartesian below, which only
+# clips visually and never deletes observations silently.
+ave_limit   <- 1
+x_window    <- c(-0.4, 0.4)
+
+all_specs <- bind_rows(old_ntm, grav, bila) %>%
+  filter(AVE >= -ave_limit, AVE <= ave_limit)
+
+# Ordering is built from ALL THREE specifications, so no sector present in one
+# table but absent from another is silently dropped.
+# (To order on the main specification only, replace all_specs with grav here.)
+sector_order <- all_specs %>%
+  group_by(Label) %>%
+  summarise(mean_ave = mean(AVE, na.rm = TRUE), .groups = "drop") %>%
+  arrange(mean_ave) %>%
+  pull(Label)
+
+# Discrete y-scales place the first level at the BOTTOM. Reversing the levels
+# means the chart reads most-negative to least-negative from top to bottom,
+# which is what the subtitle claims.
+apply_levels <- function(df) {
+  df %>%
+    filter(AVE >= -ave_limit, AVE <= ave_limit) %>%
+    mutate(
+      Label = factor(Label, levels = rev(sector_order)),
+      broad_sector_flag = factor(broad_sector_flag,
+                                 levels = c("Manufacturing", "Services")),
+      spec = factor(spec, levels = spec_levels)
+    ) %>%
+    filter(!is.na(Label))
+}
+
+old_ntm   <- apply_levels(old_ntm)
+grav      <- apply_levels(grav)
+bila      <- apply_levels(bila)
+all_specs <- apply_levels(all_specs)
+
+# Report how many points fall outside the display window rather than losing
+# them without notice.
+n_clipped <- sum(all_specs$AVE < x_window[1] | all_specs$AVE > x_window[2])
+message(n_clipped, " point(s) fall outside the ", x_window[1], " to ",
+        x_window[2], " display window and are clipped, not removed.")
+
+## ---- 0.5 Shared theme -------------------------------------------------------
+panel_theme <- theme_minimal(base_size = 12, base_family = chart_font) +
+  theme(
+    plot.title.position = "plot",
+    plot.title       = element_text(face = "bold", size = 13, colour = "grey15",
+                                    hjust = 0, margin = margin(b = 6)),
+    axis.text.y      = element_text(size = 7.5, colour = "grey20"),
+    axis.text.x      = element_text(size = 9,   colour = "grey30"),
+    axis.title.x     = element_text(size = 10,  colour = "grey30",
+                                    margin = margin(t = 8)),
+    panel.background = element_blank(),          # was grey98
+    panel.border     = element_blank(),          # was a grey55 box
+    panel.grid.minor   = element_blank(),
+    # Faint horizontal rules let the eye track a sector across the chart.
+    panel.grid.major.y = element_line(colour = "grey93", linewidth = 0.25),
+    panel.grid.major.x = element_line(colour = "grey90", linewidth = 0.3),
+    panel.spacing.y  = unit(10, "pt"),
+    strip.text.y     = element_text(angle = 0, face = "bold", size = 8.5,
+                                    colour = "grey25", hjust = 0),
+    legend.position  = "top",
+    legend.direction = "horizontal",
+    legend.background = element_blank(),
+    legend.key       = element_blank(),
+    legend.title     = element_blank(),
+    legend.text      = element_text(size = 9),
+    plot.caption     = element_text(colour = "grey45", size = 8.5, hjust = 0)
+  )
+
+## ---- 0.6 Shared scales and layers -------------------------------------------
+x_scale <- scale_x_continuous(
+  breaks = seq(x_window[1], x_window[2], 0.2),
+  labels = label_percent(accuracy = 1)
+)
+
+x_window_coord <- coord_cartesian(xlim = x_window)   # clips, does not delete
+
+zero_line <- geom_vline(xintercept = 0, linetype = "solid",
+                        colour = "grey70", linewidth = 0.3)
+
+facet_bs <- facet_grid(broad_sector_flag ~ ., scales = "free_y", space = "free")
+
+x_lab <- "Ad-valorem equivalent (% of trade cost)"
+
+## ---- 0.7 Export helper ------------------------------------------------------
+save_chart <- function(plot, file, width, height, res = 320) {
+  agg_png(file, width = width, height = height, units = "in",
+          res = res, background = "white")
+  print(plot)
+  dev.off()
+  invisible(file)
+}
+
+
+# =============================================================================
+# SECTION 1 — THREE-PANEL CHART, FIXES AND POLISH ONLY
+# Structure unchanged: colour still encodes broad sector, panels side by side.
+# =============================================================================
+
+s1_panel <- function(df, panel_title, show_y_text, show_strip) {
+  p <- ggplot(df, aes(x = AVE, y = Label, colour = broad_sector_flag)) +
+    zero_line +
+    geom_point(size = 2.4, alpha = 0.9) +
+    scale_colour_manual(values = sector_cols) +
+    x_scale + x_window_coord + facet_bs +
+    labs(title = panel_title, x = x_lab, y = NULL) +
+    panel_theme
+
+  if (!show_y_text)  p <- p + theme(axis.text.y  = element_blank())
+  if (!show_strip)   p <- p + theme(strip.text.y = element_blank())
+  p
+}
+
+s1_old  <- s1_panel(old_ntm, "A.  Previous method: non-empirical",
+                    show_y_text = TRUE,  show_strip = FALSE)
+s1_grav <- s1_panel(grav,    "B.  Main specification: gravity controls",
+                    show_y_text = FALSE, show_strip = FALSE)
+s1_bila <- s1_panel(bila,    "C.  Extension: bilateral FE",
+                    show_y_text = FALSE, show_strip = TRUE)
+
+section_1_plot <-
+  (s1_old | s1_grav | s1_bila) +
+  plot_layout(widths = c(1, 1, 1), guides = "collect") +   # one legend, not three
+  plot_annotation(
+    title    = "Comparing AVE results across three methodologies",
+    subtitle = paste("Sectors ordered from most to least negative AVE,",
+                     "top to bottom | Estimates outside \u00b1100% excluded"),
+    caption  = "Department for Business, Innovation, Science and Trade",
+    theme = theme(
+      plot.title.position = "plot",
+      plot.title    = element_text(face = "bold", size = 16, colour = "grey15",
+                                   hjust = 0, family = chart_font),
+      plot.subtitle = element_text(colour = "grey45", size = 12, hjust = 0,
+                                   margin = margin(b = 8), family = chart_font),
+      plot.caption  = element_text(colour = "grey45", size = 9, hjust = 0,
+                                   family = chart_font),
+      plot.margin   = margin(12, 18, 10, 12)
+    )
+  ) &
+  theme(legend.position = "top")
+
+section_1_plot
+
+# save_chart(section_1_plot,
+#            "Applications/USA/AVE_S1_three_panel.png",
+#            width = 16, height = 9)
+
+
+# =============================================================================
+# SECTION 2 — OPTION 1: SINGLE-PANEL DUMBBELL
+# One row per sector, three estimates joined by a connector. Colour is freed
+# from the facet and now encodes specification, so movement between methods
+# reads directly instead of across separated panels.
+# =============================================================================
+
+# Connector spans the full range of the three estimates for each sector.
+s2_range <- all_specs %>%
+  group_by(Label, broad_sector_flag) %>%
+  summarise(xmin = min(AVE, na.rm = TRUE),
+            xmax = max(AVE, na.rm = TRUE),
+            .groups = "drop")
+
+section_2_plot <-
+  ggplot(all_specs, aes(x = AVE, y = Label)) +
+  zero_line +
+  geom_segment(data = s2_range,
+               aes(x = xmin, xend = xmax, y = Label, yend = Label),
+               inherit.aes = FALSE,
+               colour = "grey78", linewidth = 0.7, lineend = "round") +
+  geom_point(aes(colour = spec), size = 2.8, alpha = 0.95) +
+  scale_colour_manual(values = spec_cols, drop = FALSE) +
+  x_scale + x_window_coord + facet_bs +
+  labs(
+    title    = "Comparing AVE results across three methodologies",
+    subtitle = paste("Each sector shows all three estimates | Ordered from most",
+                     "to least negative AVE, top to bottom |",
+                     "Estimates outside \u00b1100% excluded"),
+    caption  = "Department for Business, Innovation, Science and Trade",
+    x = x_lab, y = NULL
+  ) +
+  panel_theme +
+  theme(
+    plot.title    = element_text(face = "bold", size = 16, colour = "grey15",
+                                 hjust = 0, margin = margin(b = 4)),
+    plot.subtitle = element_text(colour = "grey45", size = 11, hjust = 0,
+                                 margin = margin(b = 10)),
+    axis.text.y   = element_text(size = 9, colour = "grey20"),
+    plot.margin   = margin(12, 18, 10, 12)
+  )
+
+section_2_plot
+
+# save_chart(section_2_plot,
+#            "Applications/USA/AVE_S2_dumbbell.png",
+#            width = 10, height = 11)
+
+
+# =============================================================================
+# SECTION 3 — OPTION 2: THREE LINKED PANELS
+# Panels kept, but each is a single colour by specification, the legend is
+# collected once, strips appear only on the right-hand panel, and faint
+# horizontal rules carry the eye across all three.
+# =============================================================================
+
+s3_panel <- function(df, panel_title, show_y_text, show_strip) {
+  p <- ggplot(df, aes(x = AVE, y = Label, colour = spec)) +
+    zero_line +
+    geom_point(size = 2.4, alpha = 0.95) +
+    scale_colour_manual(values = spec_cols, drop = FALSE) +
+    x_scale + x_window_coord + facet_bs +
+    labs(title = panel_title, x = x_lab, y = NULL) +
+    panel_theme
+
+  if (!show_y_text)  p <- p + theme(axis.text.y  = element_blank())
+  if (!show_strip)   p <- p + theme(strip.text.y = element_blank())
+  p
+}
+
+s3_old  <- s3_panel(old_ntm, "A.  Previous method: non-empirical",
+                    show_y_text = TRUE,  show_strip = FALSE)
+s3_grav <- s3_panel(grav,    "B.  Main specification: gravity controls",
+                    show_y_text = FALSE, show_strip = FALSE)
+s3_bila <- s3_panel(bila,    "C.  Extension: bilateral FE",
+                    show_y_text = FALSE, show_strip = TRUE)
+
+section_3_plot <-
+  (s3_old | s3_grav | s3_bila) +
+  plot_layout(widths = c(1, 1, 1), guides = "collect") +
+  plot_annotation(
+    title    = "Comparing AVE results across three methodologies",
+    subtitle = paste("Sectors ordered from most to least negative AVE,",
+                     "top to bottom | Estimates outside \u00b1100% excluded"),
+    caption  = "Department for Business, Innovation, Science and Trade",
+    theme = theme(
+      plot.title.position = "plot",
+      plot.title    = element_text(face = "bold", size = 16, colour = "grey15",
+                                   hjust = 0, family = chart_font),
+      plot.subtitle = element_text(colour = "grey45", size = 12, hjust = 0,
+                                   margin = margin(b = 8), family = chart_font),
+      plot.caption  = element_text(colour = "grey45", size = 9, hjust = 0,
+                                   family = chart_font),
+      plot.margin   = margin(12, 18, 10, 12)
+    )
+  ) &
+  theme(legend.position = "top")
+
+section_3_plot
+
+# save_chart(section_3_plot,
+#            "Applications/USA/AVE_S3_three_linked_panels.png",
+#            width = 16, height = 9)
