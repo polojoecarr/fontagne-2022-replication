@@ -1,11 +1,12 @@
 # =============================================================================
 # AVE comparison chart — three panels, colour by specification
-#   A. Previous method: non-empirical   (dark blue)
+#   A. Previous method: non-empirical       (dark blue)
 #   B. Main specification: gravity controls (deep pink — the hero series)
-#   C. Extension: bilateral FE          (turquoise)
+#   C. Extension: bilateral FE              (turquoise)
 #
-# Broad sectors (Manufacturing / Services) are identified by bordered facet
-# panels and right-hand strip labels, so colour is free to encode method.
+# Broad sectors are identified by bordered facet panels with grey strip bars,
+# so colour is free to encode method. No legend: each panel title names its
+# own specification.
 # =============================================================================
 
 library(dplyr)
@@ -14,6 +15,14 @@ library(ggplot2)
 library(scales)
 library(patchwork)
 library(ragg)
+
+
+## ---- 0. Chart options -------------------------------------------------------
+# Sector ordering basis:
+#   "gravity" = order on the main specification, so panel B reads monotonically
+#               and departures from it in panels A and C stand out
+#   "all"     = order on the mean of all three specifications
+order_source <- "gravity"
 
 
 ## ---- 1. Palette -------------------------------------------------------------
@@ -27,24 +36,24 @@ spec_levels <- c("Previous method (non-empirical)",
                  "Gravity controls",
                  "Bilateral FE")
 
-# Deep pink sits on the main specification so the eye lands there first.
 spec_cols <- c(
   "Previous method (non-empirical)" = af_blue,
   "Gravity controls"                = af_pink,
   "Bilateral FE"                    = af_teal
 )
 
-# Alternative: to visibly retire the old method, swap its colour for a neutral
-# grey and let the two econometric specifications carry the colour:
+# Alternative: to visibly retire the old method, grey it out and let the two
+# econometric specifications carry the colour:
 # spec_cols[["Previous method (non-empirical)"]] <- "#8C8C8C"
 
-# Chart furniture greys
+# Chart furniture — deliberately neutral so nothing competes with spec colour
 grey_border <- "grey60"
+grey_panel  <- "grey99"
+grey_strip  <- "grey94"
 grey_gridx  <- "grey91"
 grey_gridy  <- "grey95"
 
-# Leave "" for the device default; set to e.g. "Arial" if installed, so output
-# is identical across machines.
+# Leave "" for the device default; set to e.g. "Arial" if installed.
 chart_font <- ""
 
 
@@ -100,12 +109,25 @@ x_window  <- c(-0.4, 0.4)
 all_specs <- bind_rows(old_ntm, grav, bila) %>%
   filter(AVE >= -ave_limit, AVE <= ave_limit)
 
-# Ordering built from all three specifications so nothing is silently dropped.
-# (For ordering on the main specification alone, replace all_specs with grav.)
-sector_order <- all_specs %>%
+order_basis <- switch(
+  order_source,
+  gravity = filter(all_specs, spec == "Gravity controls"),
+  all     = all_specs,
+  stop("order_source must be \"gravity\" or \"all\"")
+)
+
+# Sectors absent from the ordering basis fall back to the mean across all three,
+# so nothing is silently dropped when ordering on a single specification.
+fallback_order <- all_specs %>%
   group_by(Label) %>%
-  summarise(mean_ave = mean(AVE, na.rm = TRUE), .groups = "drop") %>%
-  arrange(mean_ave) %>%
+  summarise(mean_ave = mean(AVE, na.rm = TRUE), .groups = "drop")
+
+sector_order <- order_basis %>%
+  group_by(Label) %>%
+  summarise(order_ave = mean(AVE, na.rm = TRUE), .groups = "drop") %>%
+  full_join(fallback_order, by = "Label") %>%
+  mutate(order_ave = coalesce(order_ave, mean_ave)) %>%
+  arrange(order_ave) %>%
   pull(Label)
 
 # Levels reversed so the chart reads most- to least-negative top to bottom.
@@ -141,23 +163,21 @@ panel_theme <- theme_minimal(base_size = 12, base_family = chart_font) +
     axis.text.x      = element_text(size = 9, colour = "grey30"),
     axis.title.x     = element_text(size = 10, colour = "grey30",
                                     margin = margin(t = 8)),
-    # Bordered broad-sector panels
-    panel.background = element_rect(fill = "white", colour = NA),
+    # Bordered broad-sector panels with a faint lift off the page
+    panel.background = element_rect(fill = grey_panel, colour = NA),
     panel.border     = element_rect(colour = grey_border, fill = NA,
                                     linewidth = 0.5),
     panel.grid.minor   = element_blank(),
     panel.grid.major.y = element_line(colour = grey_gridy, linewidth = 0.25),
     panel.grid.major.x = element_line(colour = grey_gridx, linewidth = 0.3),
     panel.spacing.y  = unit(12, "pt"),
+    # Neutral strip bar: labels the block without adding a second colour code
+    strip.background = element_rect(fill = grey_strip, colour = grey_border,
+                                    linewidth = 0.5),
     strip.text.y     = element_text(angle = 0, face = "bold", size = 9,
-                                    colour = "grey25", hjust = 0,
-                                    margin = margin(l = 8)),
-    legend.position  = "top",
-    legend.direction = "horizontal",
-    legend.background = element_blank(),
-    legend.key       = element_blank(),
-    legend.title     = element_blank(),
-    legend.text      = element_text(size = 9.5, colour = "grey25")
+                                    colour = "grey20",
+                                    margin = margin(t = 6, r = 6, b = 6, l = 6)),
+    legend.position  = "none"
   )
 
 
@@ -182,19 +202,20 @@ build_panel <- function(df, panel_title, show_y_text, show_strip, show_x_title) 
   p <- ggplot(df, aes(x = AVE, y = Label, colour = spec)) +
     zero_line +
     geom_point(size = 2.5, alpha = 0.95) +
-    scale_colour_manual(values = spec_cols, drop = FALSE,
-                        guide = guide_legend(override.aes = list(size = 3))) +
+    # guide = "none": panel titles already name the specification
+    scale_colour_manual(values = spec_cols, drop = FALSE, guide = "none") +
     x_scale + x_window_coord + facet_bs +
     labs(title = panel_title, x = x_lab, y = NULL) +
     panel_theme
 
-  if (!show_y_text)    p <- p + theme(axis.text.y   = element_blank())
-  if (!show_strip)     p <- p + theme(strip.text.y  = element_blank())
-  if (!show_x_title)   p <- p + theme(axis.title.x  = element_blank())
+  if (!show_y_text)  p <- p + theme(axis.text.y   = element_blank())
+  if (!show_strip)   p <- p + theme(strip.text.y  = element_blank(),
+                                    strip.background = element_blank())
+  if (!show_x_title) p <- p + theme(axis.title.x  = element_blank())
   p
 }
 
-# Axis title appears once, under the centre panel, rather than three times.
+# Strip bars and axis title appear once, on the panels where they read best.
 p_old  <- build_panel(old_ntm, "A.  Previous method: non-empirical",
                       show_y_text = TRUE,  show_strip = FALSE,
                       show_x_title = FALSE)
@@ -207,13 +228,20 @@ p_bila <- build_panel(bila,    "C.  Extension: bilateral FE",
 
 
 ## ---- 8. Combine -------------------------------------------------------------
+chart_subtitle <- if (order_source == "gravity") {
+  paste("Sectors ordered by the main specification, most to least negative AVE,",
+        "top to bottom | Estimates outside \u00b1100% excluded")
+} else {
+  paste("Sectors ordered from most to least negative AVE, top to bottom",
+        "| Estimates outside \u00b1100% excluded")
+}
+
 final_plot <-
   (p_old | p_grav | p_bila) +
-  plot_layout(widths = c(1, 1, 1), guides = "collect") +
+  plot_layout(widths = c(1, 1, 1)) +
   plot_annotation(
     title    = "Comparing AVE results across three methodologies",
-    subtitle = paste("Sectors ordered from most to least negative AVE,",
-                     "top to bottom | Estimates outside \u00b1100% excluded"),
+    subtitle = chart_subtitle,
     caption  = "Department for Business, Innovation, Science and Trade",
     theme = theme(
       plot.title.position = "plot",
@@ -225,8 +253,7 @@ final_plot <-
                                    family = chart_font),
       plot.margin   = margin(14, 18, 10, 12)
     )
-  ) &
-  theme(legend.position = "top")
+  )
 
 final_plot
 
