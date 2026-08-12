@@ -1,28 +1,19 @@
 # =============================================================================
-# AVE comparison chart — three panels, colour by specification
+# AVE comparison chart — specification across columns, broad sector down rows
 #   A. Previous method: non-empirical       (dark blue)
 #   B. Main specification: gravity controls (deep pink — the hero series)
 #   C. Extension: bilateral FE              (turquoise)
 #
-# Broad sectors are identified by bordered facet panels with grey strip bars,
-# so colour is free to encode method. No legend: each panel title names its
-# own specification.
+# Built as ONE ggplot faceted spec x broad sector rather than three plots
+# stitched together, so column widths and row heights align by construction.
+# No legend: each column heading names its own specification.
 # =============================================================================
 
 library(dplyr)
 library(forcats)
 library(ggplot2)
 library(scales)
-library(patchwork)
 library(ragg)
-
-
-## ---- 0. Chart options -------------------------------------------------------
-# Sector ordering basis:
-#   "gravity" = order on the main specification, so panel B reads monotonically
-#               and departures from it in panels A and C stand out
-#   "all"     = order on the mean of all three specifications
-order_source <- "gravity"
 
 
 ## ---- 1. Palette -------------------------------------------------------------
@@ -42,16 +33,25 @@ spec_cols <- c(
   "Bilateral FE"                    = af_teal
 )
 
+# Column headings
+spec_labs <- c(
+  "Previous method (non-empirical)" = "A.  Previous method: non-empirical",
+  "Gravity controls"                = "B.  Main specification: gravity controls",
+  "Bilateral FE"                    = "C.  Extension: bilateral FE"
+)
+
 # Alternative: to visibly retire the old method, grey it out and let the two
 # econometric specifications carry the colour:
 # spec_cols[["Previous method (non-empirical)"]] <- "#8C8C8C"
 
-# Chart furniture — deliberately neutral so nothing competes with spec colour
+# Backgrounds: grey page, white panels — panels sit forward off the canvas.
+# To invert this (grey panels on a white page), set page_bg to "white" and
+# panel_bg to "grey96".
+page_bg     <- "#F4F5F7"
+panel_bg    <- "white"
 grey_border <- "grey60"
-grey_panel  <- "grey99"
-grey_strip  <- "grey94"
-grey_gridx  <- "grey91"
-grey_gridy  <- "grey95"
+grey_gridx  <- "grey88"
+grey_gridy  <- "grey93"
 
 # Leave "" for the device default; set to e.g. "Arial" if installed.
 chart_font <- ""
@@ -101,167 +101,104 @@ old_ntm <- Old_NTMs %>%
   mutate(spec = "Previous method (non-empirical)")
 
 
-## ---- 4. Outlier rule, display window and shared ordering --------------------
+## ---- 4. Outlier rule, display window and ordering ---------------------------
 # The outlier rule deletes; the display window only clips.
 ave_limit <- 1
 x_window  <- c(-0.4, 0.4)
 
-all_specs <- bind_rows(old_ntm, grav, bila) %>%
+plot_data <- bind_rows(old_ntm, grav, bila) %>%
   filter(AVE >= -ave_limit, AVE <= ave_limit)
 
-order_basis <- switch(
-  order_source,
-  gravity = filter(all_specs, spec == "Gravity controls"),
-  all     = all_specs,
-  stop("order_source must be \"gravity\" or \"all\"")
-)
-
-# Sectors absent from the ordering basis fall back to the mean across all three,
-# so nothing is silently dropped when ordering on a single specification.
-fallback_order <- all_specs %>%
+# Ordering built from all three specifications so nothing is silently dropped.
+# (To order on the main specification alone, filter to spec == "Gravity controls".)
+sector_order <- plot_data %>%
   group_by(Label) %>%
-  summarise(mean_ave = mean(AVE, na.rm = TRUE), .groups = "drop")
-
-sector_order <- order_basis %>%
-  group_by(Label) %>%
-  summarise(order_ave = mean(AVE, na.rm = TRUE), .groups = "drop") %>%
-  full_join(fallback_order, by = "Label") %>%
-  mutate(order_ave = coalesce(order_ave, mean_ave)) %>%
-  arrange(order_ave) %>%
+  summarise(mean_ave = mean(AVE, na.rm = TRUE), .groups = "drop") %>%
+  arrange(mean_ave) %>%
   pull(Label)
 
 # Levels reversed so the chart reads most- to least-negative top to bottom.
-apply_levels <- function(df) {
-  df %>%
-    filter(AVE >= -ave_limit, AVE <= ave_limit) %>%
-    mutate(
-      Label = factor(Label, levels = rev(sector_order)),
-      broad_sector_flag = factor(broad_sector_flag,
-                                 levels = c("Manufacturing", "Services")),
-      spec = factor(spec, levels = spec_levels)
-    ) %>%
-    filter(!is.na(Label))
-}
+plot_data <- plot_data %>%
+  mutate(
+    Label = factor(Label, levels = rev(sector_order)),
+    broad_sector_flag = factor(broad_sector_flag,
+                               levels = c("Manufacturing", "Services")),
+    spec = factor(spec, levels = spec_levels)
+  ) %>%
+  filter(!is.na(Label))
 
-old_ntm   <- apply_levels(old_ntm)
-grav      <- apply_levels(grav)
-bila      <- apply_levels(bila)
-all_specs <- apply_levels(all_specs)
-
-n_clipped <- sum(all_specs$AVE < x_window[1] | all_specs$AVE > x_window[2])
+n_clipped <- sum(plot_data$AVE < x_window[1] | plot_data$AVE > x_window[2])
 message(n_clipped, " point(s) fall outside the display window and are clipped, ",
         "not removed.")
 
 
-## ---- 5. Shared theme --------------------------------------------------------
-panel_theme <- theme_minimal(base_size = 12, base_family = chart_font) +
+## ---- 5. Chart ---------------------------------------------------------------
+final_plot <-
+  ggplot(plot_data, aes(x = AVE, y = Label, colour = spec)) +
+  geom_vline(xintercept = 0, colour = "grey65", linewidth = 0.4) +
+  geom_point(size = 2.5, alpha = 0.95) +
+  scale_colour_manual(values = spec_cols, drop = FALSE, guide = "none") +
+  scale_x_continuous(breaks = seq(x_window[1], x_window[2], 0.2),
+                     labels = label_percent(accuracy = 1)) +
+  coord_cartesian(xlim = x_window) +          # clips, does not delete
+  # Columns are equal and rows share a y-scale by construction: no manual
+  # width tuning, and the sector labels are drawn once for the whole grid.
+  facet_grid(broad_sector_flag ~ spec,
+             scales   = "free_y",
+             space    = "free_y",
+             labeller = labeller(spec = spec_labs)) +
+  labs(
+    title    = "Comparing AVE results across three methodologies",
+    subtitle = paste("Sectors ordered from most to least negative AVE,",
+                     "top to bottom | Estimates outside \u00b1100% excluded"),
+    caption  = "Department for Business, Innovation, Science and Trade",
+    x = "Ad-valorem equivalent (% of trade cost)",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12, base_family = chart_font) +
   theme(
     plot.title.position = "plot",
-    plot.title       = element_text(face = "bold", size = 13, colour = "grey15",
-                                    hjust = 0, margin = margin(b = 8)),
-    axis.text.y      = element_text(size = 8, colour = "grey20"),
-    axis.text.x      = element_text(size = 9, colour = "grey30"),
-    axis.title.x     = element_text(size = 10, colour = "grey30",
-                                    margin = margin(t = 8)),
-    # Bordered broad-sector panels with a faint lift off the page
-    panel.background = element_rect(fill = grey_panel, colour = NA),
+    plot.title    = element_text(face = "bold", size = 16, colour = "grey15",
+                                 hjust = 0, margin = margin(b = 4)),
+    plot.subtitle = element_text(colour = "grey45", size = 12, hjust = 0,
+                                 margin = margin(b = 12)),
+    plot.caption  = element_text(colour = "grey50", size = 9, hjust = 0,
+                                 margin = margin(t = 10)),
+    # Grey canvas, white bordered panels
+    plot.background  = element_rect(fill = page_bg, colour = NA),
+    panel.background = element_rect(fill = panel_bg, colour = NA),
     panel.border     = element_rect(colour = grey_border, fill = NA,
                                     linewidth = 0.5),
     panel.grid.minor   = element_blank(),
     panel.grid.major.y = element_line(colour = grey_gridy, linewidth = 0.25),
     panel.grid.major.x = element_line(colour = grey_gridx, linewidth = 0.3),
+    panel.spacing.x  = unit(14, "pt"),
     panel.spacing.y  = unit(12, "pt"),
-    # Neutral strip bar: labels the block without adding a second colour code
-    strip.background = element_rect(fill = grey_strip, colour = grey_border,
-                                    linewidth = 0.5),
-    strip.text.y     = element_text(angle = 0, face = "bold", size = 9,
-                                    colour = "grey20",
-                                    margin = margin(t = 6, r = 6, b = 6, l = 6)),
-    legend.position  = "none"
-  )
-
-
-## ---- 6. Shared scales and layers --------------------------------------------
-x_scale <- scale_x_continuous(
-  breaks = seq(x_window[1], x_window[2], 0.2),
-  labels = label_percent(accuracy = 1)
-)
-
-x_window_coord <- coord_cartesian(xlim = x_window)   # clips, does not delete
-
-zero_line <- geom_vline(xintercept = 0, linetype = "solid",
-                        colour = "grey65", linewidth = 0.4)
-
-facet_bs <- facet_grid(broad_sector_flag ~ ., scales = "free_y", space = "free")
-
-x_lab <- "Ad-valorem equivalent (% of trade cost)"
-
-
-## ---- 7. Panel builder -------------------------------------------------------
-build_panel <- function(df, panel_title, show_y_text, show_strip, show_x_title) {
-  p <- ggplot(df, aes(x = AVE, y = Label, colour = spec)) +
-    zero_line +
-    geom_point(size = 2.5, alpha = 0.95) +
-    # guide = "none": panel titles already name the specification
-    scale_colour_manual(values = spec_cols, drop = FALSE, guide = "none") +
-    x_scale + x_window_coord + facet_bs +
-    labs(title = panel_title, x = x_lab, y = NULL) +
-    panel_theme
-
-  if (!show_y_text)  p <- p + theme(axis.text.y   = element_blank())
-  if (!show_strip)   p <- p + theme(strip.text.y  = element_blank(),
-                                    strip.background = element_blank())
-  if (!show_x_title) p <- p + theme(axis.title.x  = element_blank())
-  p
-}
-
-# Strip bars and axis title appear once, on the panels where they read best.
-p_old  <- build_panel(old_ntm, "A.  Previous method: non-empirical",
-                      show_y_text = TRUE,  show_strip = FALSE,
-                      show_x_title = FALSE)
-p_grav <- build_panel(grav,    "B.  Main specification: gravity controls",
-                      show_y_text = FALSE, show_strip = FALSE,
-                      show_x_title = TRUE)
-p_bila <- build_panel(bila,    "C.  Extension: bilateral FE",
-                      show_y_text = FALSE, show_strip = TRUE,
-                      show_x_title = FALSE)
-
-
-## ---- 8. Combine -------------------------------------------------------------
-chart_subtitle <- if (order_source == "gravity") {
-  paste("Sectors ordered by the main specification, most to least negative AVE,",
-        "top to bottom | Estimates outside \u00b1100% excluded")
-} else {
-  paste("Sectors ordered from most to least negative AVE, top to bottom",
-        "| Estimates outside \u00b1100% excluded")
-}
-
-final_plot <-
-  (p_old | p_grav | p_bila) +
-  plot_layout(widths = c(1, 1, 1)) +
-  plot_annotation(
-    title    = "Comparing AVE results across three methodologies",
-    subtitle = chart_subtitle,
-    caption  = "Department for Business, Innovation, Science and Trade",
-    theme = theme(
-      plot.title.position = "plot",
-      plot.title    = element_text(face = "bold", size = 16, colour = "grey15",
-                                   hjust = 0, family = chart_font),
-      plot.subtitle = element_text(colour = "grey45", size = 12, hjust = 0,
-                                   margin = margin(b = 10), family = chart_font),
-      plot.caption  = element_text(colour = "grey50", size = 9, hjust = 0,
-                                   family = chart_font),
-      plot.margin   = margin(14, 18, 10, 12)
-    )
+    # Column headings act as the old panel titles
+    strip.background.x = element_blank(),
+    strip.text.x       = element_text(face = "bold", size = 12.5,
+                                      colour = "grey15", hjust = 0,
+                                      margin = margin(b = 8)),
+    # Broad-sector labels down the right-hand edge
+    strip.background.y = element_blank(),
+    strip.text.y       = element_text(angle = 0, face = "bold", size = 9,
+                                      colour = "grey20", hjust = 0,
+                                      margin = margin(l = 8)),
+    axis.text.y  = element_text(size = 8, colour = "grey20"),
+    axis.text.x  = element_text(size = 9, colour = "grey30"),
+    axis.title.x = element_text(size = 10, colour = "grey30",
+                                margin = margin(t = 8)),
+    legend.position = "none",
+    plot.margin  = margin(14, 18, 10, 12)
   )
 
 final_plot
 
 
-## ---- 9. Export --------------------------------------------------------------
+## ---- 6. Export --------------------------------------------------------------
 save_chart <- function(plot, file, width, height, res = 320) {
   agg_png(file, width = width, height = height, units = "in",
-          res = res, background = "white")
+          res = res, background = page_bg)
   print(plot)
   dev.off()
   invisible(file)
