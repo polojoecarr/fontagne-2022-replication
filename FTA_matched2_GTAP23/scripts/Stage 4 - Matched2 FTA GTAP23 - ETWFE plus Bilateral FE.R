@@ -53,7 +53,7 @@ setFixest_nthreads(parallel::detectCores())
 ##   Chunk 2: ome tal                                                          ~2.1 h
 ##   Chunk 3: mff                                                              ~1.7 h
 ##   Chunk 4: crp                                                              ~1.8 h
-chunk_sectors <- c("mff")   # Chunk 3 of 4
+chunk_sectors <- c("crp")   # Chunk 4 of 4 (final)
 
 project_root <- "C:/Claude Code Project Folder/Fontange 2022"
 sigma_dir    <- file.path(project_root, "Replic_FGO", "Replic_FGO")

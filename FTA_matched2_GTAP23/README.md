@@ -30,43 +30,24 @@ two can be read side by side.
 `results/Table_matched2_FTA_by_GTAP23.html` / `.tex` plus
 `results/COMBINED_matched2_comparison.csv`. SEs are pair-clustered throughout.
 
-## Status
+## Status — COMPLETE (all three specifications, all 14 GTAP-23 sectors)
 | Stage | State | Runtime |
 |---|---|--:|
-| (1) Baseline | **complete**, 14/14 sectors | 72.4 min |
-| (3) Bilateral FE | **complete**, 14/14 sectors | 258.5 min |
-| (4) ETWFE + Bilateral FE | **chunks 1-3 done**, 13/14 sectors (`crp` pending) | 177.4 + 132.1 + 112.4 min |
+| (1) Baseline | complete, 14/14 sectors | 72.4 min |
+| (3) Bilateral FE | complete, 14/14 sectors | 258.5 min |
+| (4) ETWFE + Bilateral FE | complete, 14/14 sectors | 552.2 min across 4 chunks |
 
-### Stage 4 so far (13 of 14 sectors)
-Stage 4 is run in chunks; only `crp` is still outstanding, so its column
-in the table is **provisional** and its Panel-C shares are computed over the 13
-sectors available. The table's own "Coverage" source note states this and
-self-corrects once the remaining chunks finish.
-
-The result that matters: **meat & processed foods (`prf`) survives the full
-specification at 0.313\*\* (t = 2.26)**. It weakens from Stage 3's 0.444\*\*\*
-but stays positive and significant at 5% once treatment timing is handled by the
-ETWFE block on top of the pair fixed effect. In the first (`_2`) matched table
-**no** sector survived this specification at any level, so this is the clearest
-substantive difference the narrow matched definition produces.
-
-The thin-cohort worry raised before the run did not materialise in the way
-feared: **all 15 cohort-year cells were estimated in every sector**, with none
-dropped for collinearity. Standard errors widen relative to Stage 3 but remain
-usable.
-
-Of the remaining 12 estimated sectors, only `eeq` (0.077) is even positive;
-`mff` came in at -0.076 (t = 0.80), insignificant.
-Three are significantly negative — `tal` -0.409\*\*\*, `omf` -0.260\*\*\*, and
-`otn` -0.409\* — and textiles is again the caution: +0.738\*\*\* in the baseline,
--0.262\*\*\* under pair FE, -0.409\*\*\* under ETWFE + pair FE.
+Stage 4 chunk runtimes: 177.4 (10 small/medium) + 132.1 (`ome`, `tal`) +
+112.4 (`mff`) + 130.3 (`crp`) minutes.
 
 ### Share of the 14 sectors with a positive & significant matched effect
 | Stage | any positive | +sig 1% | +sig 5% | +sig 10% |
 |---|--:|--:|--:|--:|
-| (1) Baseline     | 92.9% | 42.9% | 50.0% | 64.3% |
-| (3) Bilateral FE | 42.9% |  7.1% |  7.1% | 14.3% |
+| (1) Baseline             | 92.9% | 42.9% | 50.0% | 64.3% |
+| (3) Bilateral FE         | 42.9% |  7.1% |  7.1% | 14.3% |
+| (4) ETWFE + Bilateral FE | 14.3% |  0.0% |  7.1% |  7.1% |
 
+### Reading the three columns
 Compared with the first (`_2`) matched table, halving the treatment group leaves
 *more* sectors positive under the baseline (92.9% vs 85.7%) but fewer of them
 significant (42.9% vs 64.3% at 1%) — the expected cost of a thinner treatment
@@ -75,20 +56,40 @@ textiles go from flat to large and strongly significant (aff 0.12 -> 0.67***,
 tal 0.05 -> 0.74***), while chemicals and energy fall away (crp 0.57*** -> 0.02,
 enr 1.01*** -> 0.36*).
 
-Adding the bilateral pair fixed effect again removes almost all of it, as in
-both earlier tables — but not quite all. **Meat & processed foods (`prf`) is the
-one sector that survives**, at 0.444*** under pair FE — and it is new to the
-narrow definition: in the `_2` table's Stage 3 `prf` was -0.034 and
-indistinguishable from zero. Food products (`ofd`)
-holds a weak 0.102*. Everything else is indistinguishable from zero or negative,
-and four sectors turn significantly negative (otn -0.428***, tal -0.262***,
-enr -0.259**, omf -0.131**) — note that textiles flips sign entirely between the
-two specifications, which is a warning against reading the baseline column alone.
+Adding the bilateral pair fixed effect removes almost all of it, as in both
+earlier tables. Adding the ETWFE block on top removes more still: under the full
+specification only **two of fourteen sectors are even positive**, and just one
+is significant.
+
+**The one durable result is meat & processed foods (`prf`)**: 1.267*** in the
+baseline, 0.444*** under pair FE, and **0.313** (t = 2.26) under ETWFE + pair
+FE**. It attenuates as identification tightens but never loses its sign or its
+significance. This is the clearest substantive difference the narrow matched
+definition produces — in the `_2` table `prf` was -0.034 (insignificant) under
+pair FE and 0.073 (insignificant) under ETWFE + pair FE.
+
+For calibration, the `_2` table was not completely empty at Stage 4 either: no
+sector there reached 1% or 5%, but `mff` was positive and significant at the 10%
+level (0.128*). What the narrow definition changes is that a sector now clears
+the **5%** bar, and it is a different sector.
+
+The thin-cohort concern raised before the run did not materialise: **all 15
+cohort-year cells were estimated in every one of the 14 sectors**, with none
+dropped for collinearity. Standard errors widen relative to Stage 3 but stay
+usable.
+
+Four sectors are significantly negative under the full specification —
+`tal` -0.409***, `omf` -0.260***, `crp` -0.139*** and `otn` -0.409*. Textiles is
+the clearest warning against reading the baseline column alone: **+0.738*** in
+(1), -0.262*** in (3), -0.409*** in (4)** — a full sign reversal as
+identification tightens.
 
 The broad conclusion is unchanged from the complete-FTA and first matched
-analyses: the apparent sectoral FTA effect is driven by cross-pair comparison,
-not by within-pair change after entry into force, and six widely-spaced waves
-carry little within-pair identifying variation.
+analyses: the apparent sectoral FTA effect is driven mostly by cross-pair
+comparison rather than within-pair change after entry into force, and six
+widely-spaced waves carry little within-pair identifying variation. The
+narrow matched definition is the first cut of the data in which a single
+sector — agri-food — resists that collapse at conventional significance.
 
 Stage 4 is chunked (`chunk_sectors` near the top of its script) so it can be run
 in sittings: Chunk 1 = the 10 small/medium sectors, Chunk 2 = `ome tal`,
