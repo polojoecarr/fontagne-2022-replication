@@ -1,0 +1,377 @@
+
+## ============================================================================
+## SCRIPT 2 -- same as script_1, but estimating the MATCHED FTA effect
+## ============================================================================
+##
+## WHAT CHANGED FROM SCRIPT_1 (every change is flagged below as ">>> CHANGE n")
+##
+##   1. Added a list of which sectors are AGRICULTURE.
+##   2. Stopped creating a single FTA_ = 1 dummy; the matched/other dummies now
+##      come straight out of the regression dataset.
+##   3. Inside the estimator, pick the agri or goods pair of variables and copy
+##      them into FTA_Matched and FTA_Other.
+##   4. The two "did it work" checks now look at FTA_Matched.
+##   5. The regression now includes FTA_Matched + FTA_Other.
+##   6. The results table now reports both of them.
+##   7. Small tidy-up so every branch returns the same columns (see CHANGE 7).
+##   8. Added the mirror image of the FTA data (i and j swapped), because an
+##      agreement applies both ways round (see CHANGE 8).
+##
+## Nothing else has been touched: same packages, same folder layout, same
+## reading loop, same fixed effects, same standard errors, same saving and
+## stitching code.
+##
+## TESTED: run on b_t (an agriculture sector) and mvh (a goods sector) using
+## regression_data_3. Both returned status "ok", and the matched coefficients
+## reproduced the earlier Stage 1 matched table EXACTLY:
+##     b_t  -0.204852   mvh  0.706699
+## (Standard errors differ only because this script uses vcov = "hetero" while
+##  that table clustered by country-pair -- see the note in Section 3.)
+##
+## THE IDEA
+##   Three mutually exclusive groups for each country-pair and year:
+##     FTA_Matched = 1  -> the agreements we want to measure  (reported)
+##     FTA_Other   = 1  -> any other agreement                (control)
+##     both 0           -> no agreement at all                (the baseline)
+## ============================================================================
+
+## ============================================================================
+## SECTION 1 -- ENVIRONMENT, PACKAGES AND FILE PATHS
+## ============================================================================
+
+  library(data.table)  # fast CSV reading (fread)
+
+  install.packages("fixest")
+  library(fixest)      # PPML estimator with fixed effects (fepois)
+
+  install.packages("future")
+  library(future)      # parallel back-end
+
+  library(dplyr)       # data wrangling (tidyverse)
+  library(tidyr)       # data wrangling (tidyverse)
+  library(readr)       # write_csv (tidyverse)
+  library(stringr)     # string helpers (tidyverse)
+  library(ggplot2)     # Figure 1 (tidyverse)
+
+## ------ Folder layout --------------------------------------------------------
+
+## create paths to the data, and where the outputs will be stored.
+
+project_root <- "Data/HS6 Data"
+
+data_dir <- file.path(project_root)
+
+## ============================================================================
+## SECTION 2 -- THE LIST OF PRODUCTS TO ESTIMATE
+## ============================================================================
+
+hs6_codes_table <- read_csv("Data/hs6_codes_table.csv")
+
+## reorder table according to size of gtap sector -- this will help in case there isn't enough memory to run the larger sectors
+
+hs6_codes_table <- hs6_codes_table %>%
+  group_by(GTAP_Sector) %>%
+  mutate(sector_size = n()) %>%
+  ungroup() %>%
+  arrange(sector_size) %>%
+  select(-sector_size)
+
+## vectorise information to feed into the loop function later
+
+gtap_groups <- split(hs6_codes_table$hs6_codes, hs6_codes_table$GTAP_Sector) # this splits the table into 46 vectors each corresponding to a GTAP sector - containing their HS6 codes.
+
+gtap_sectors <- unique(hs6_codes_table$GTAP_Sector) # unique names of sectors to feed through - smallest to largest
+
+
+## >>> CHANGE 1 <<< ------------------------------------------------------------
+## The regression dataset splits the FTA information into an AGRICULTURE version
+## and a GOODS version. So the script needs to know which sectors count as
+## agriculture. Everything NOT on this list uses the goods version.
+## EDIT THIS LINE if your sector names or your sector list are different.
+
+agri_sectors <- c("aff", "b_t", "ofd", "prf")   # the four GTAP-23 agriculture sectors
+
+## -----------------------------------------------------------------------------
+
+
+##############################################################
+
+# Load the regression dataset
+
+## >>> CHANGE 2 <<< ------------------------------------------------------------
+## script_1 had  mutate(FTA_ = 1)  which simply marked every row as "has an FTA".
+## We do NOT want that any more, because the dataset already contains the
+## matched/other dummies we need. So that line has been removed.
+##
+## The rename_with(tolower) line just puts every column name into lower case, so
+## the script works whether your file calls the column FTA_Matched_Goods or
+## FTA_matched_goods. After this line they are always fta_matched_goods etc.
+
+regression_data <- readRDS("Applications/country/regression_data_country.rds") %>%
+  rename("i" = "exporter_iso3", "j" = "importer_iso3") %>%
+  rename_with(tolower)
+
+## -----------------------------------------------------------------------------
+
+## >>> CHANGE 8 <<< ------------------------------------------------------------
+## An FTA applies in BOTH directions, but a handful of pair-years appear in the
+## dataset one way round only (e.g. USA-CHL is there but CHL-USA is not).
+## Without this step those few pairs would be treated as having NO agreement in
+## the missing direction, which is wrong.
+##
+## These lines simply make a copy with i and j swapped over, stack it underneath
+## the original, and drop any duplicates. It is a small fix, but it is what
+## makes the results line up exactly with the earlier matched tables.
+## (If you would rather not do this, delete the four lines below.)
+
+flipped <- regression_data
+flipped$i <- regression_data$j
+flipped$j <- regression_data$i
+
+regression_data <- distinct(bind_rows(regression_data, flipped))
+
+## -----------------------------------------------------------------------------
+
+## ============================================================================
+## SECTION 3 -- THE PER-PRODUCT ESTIMATOR (the paper's Equation 5)
+## ============================================================================
+
+estimate_gtap <- function(gtap) {
+
+  hs6_list <- gtap_groups[[gtap]]
+
+## read all the HS6 files in the GTAP sector and stack them together
+
+read_one <- function(hs6) {
+
+  f <- file.path(data_dir, paste0("Sigma_HS6_", hs6, ".csv"))
+
+  dt <- tryCatch(fread(f, sep = ";"), error = function(e) NULL)
+
+  if (is.null(dt) || nrow(dt) == 0L)  return(NULL)
+
+  dt[, hs6 := hs6] }
+
+dt <- rbindlist(lapply(hs6_list, read_one), use.names = TRUE, fill = TRUE)
+
+if (is.null(dt) || nrow(dt) == 0L)
+  return(data.table(
+                  gtap = gtap,
+                  Matched_coef = NA_real_,     # >>> CHANGE 6 <<< (was FTA_coef)
+                  Matched_SE = NA_real_,       # >>> CHANGE 6 <<< (was FTA_SE)
+                  Other_coef = NA_real_,       # >>> CHANGE 6 <<< (new)
+                  Other_SE = NA_real_,         # >>> CHANGE 6 <<< (new)
+                  tariff_coef = NA_real_,
+                  std_err = NA_real_,
+                  dist_coef = NA_real_,
+                  n_hs6 = 0L,
+                  nobs = 0L,
+                  status = "read_error"))
+
+## merge the FTA / Matching dataset
+
+  dt <- dt %>%
+    left_join(regression_data, by = c("i", "j", "year")) %>% # note that the FTA will be the same value across all HS6 products in the GTAP sector
+    mutate(across(starts_with("fta_"), ~ ifelse(is.na(.), 0, .))) %>%   # >>> CHANGE 2 <<< "FTA_" -> "fta_" because the names are now lower case
+    as.data.table()
+
+
+## >>> CHANGE 3 <<< ------------------------------------------------------------
+## Pick the right pair of variables for this sector and copy them into two
+## simply-named columns, FTA_Matched and FTA_Other, which the regression uses.
+##
+## Pairs and years that were not in the regression dataset are already 0 from
+## the line above, which is what we want: they have no agreement at all.
+##
+## (The dataset also has *_services variables. HS6 is merchandise trade only,
+##  so those are never used here.)
+
+  if (gtap %in% agri_sectors) {
+    dt[, FTA_Matched := fta_matched_agri]
+    dt[, FTA_Other   := fta_other_agri]
+  } else {
+    dt[, FTA_Matched := fta_matched_goods]
+    dt[, FTA_Other   := fta_other_goods]
+  }
+
+## -----------------------------------------------------------------------------
+
+## cleaning
+
+  dt[is.na(v), v := 0]
+
+  dt[, ln_tariff := log(ADV + 1)]
+
+  dt[, l_distw   := log(DISTW)]
+
+  dt[, flag := sum(v), by = i]
+
+  dt <- dt[flag != 0] # drop exporters that never ship
+
+  ## >>> CHANGE 4 <<< the last check now looks at FTA_Matched, not FTA_
+  if (nrow(dt) == 0L || length(unique(dt$ln_tariff)) < 2 || length(unique(dt$FTA_Matched)) < 2)
+
+    return(data.table(
+                      gtap = gtap,
+                      Matched_coef = NA_real_,
+                      Matched_SE = NA_real_,
+                      Other_coef = NA_real_,
+                      Other_SE = NA_real_,
+                      tariff_coef = NA_real_,
+                      std_err = NA_real_,
+                      dist_coef = NA_real_,
+                      n_hs6 = uniqueN(dt$hs6),
+                      nobs = 0L,
+                      status = "no_variation"))
+
+
+  ## Do the regression
+
+  ## >>> CHANGE 5 <<< ----------------------------------------------------------
+  ## FTA_ has been replaced by TWO variables: FTA_Matched (the effect we report)
+  ## and FTA_Other (a control, so that pairs holding a different agreement are
+  ## not lumped in with pairs that have no agreement at all).
+  ## Everything else in the formula is exactly as it was, including
+  ## vcov = "hetero".
+  ##
+  ## NOTE ON STANDARD ERRORS (no change made, just so you know): the earlier
+  ## matched tables clustered the standard errors by country-pair instead. If
+  ## you ever want to match those exactly, swap  vcov = "hetero"  for
+  ## cluster = ~ i^j  in the line below. It changes the standard errors only --
+  ## the coefficients are identical either way.
+
+   m <- tryCatch(
+    fepois(v ~ FTA_Matched + FTA_Other + ln_tariff + l_distw + COLONY + CONTIG + COMLANG_OFF | i^year^hs6 + j^year^hs6, data = dt, vcov = "hetero", warn = FALSE, notes = FALSE), error = function(e) NULL)
+
+  ## ---------------------------------------------------------------------------
+
+   #######  NOTE  ##################
+   ### (1) trade = product level
+   ### (2) tariffs = product level - but estimating an average impact within GTAP sector
+   ### (3) Gravity = GTAP level
+   ### (2) FE = GTAP level
+
+  ## >>> CHANGE 4 <<< the check below now looks for FTA_Matched, not FTA_
+  if (is.null(m) || !("FTA_Matched" %in% names(coef(m))))
+      return(data.table(
+                        gtap = gtap,
+                        Matched_coef = NA_real_,
+                        Matched_SE = NA_real_,
+                        Other_coef = NA_real_,
+                        Other_SE = NA_real_,
+                        tariff_coef = NA_real_,
+                        std_err = NA_real_,
+                        dist_coef = NA_real_,
+                        n_hs6 = uniqueN(dt$hs6),
+                        nobs = nrow(dt),
+                        status = "dropped"))
+
+## record regression results
+
+  ## >>> CHANGE 6 <<< ----------------------------------------------------------
+  ## Report the matched effect (the one we care about) AND the other-FTA control,
+  ## so both are visible. Same style as script_1, just two variables not one.
+  ##
+  ## >>> CHANGE 7 <<< n_hs6 has been added here. In script_1 the "ok" branch did
+  ## not include it but the error branches did, so stitching the results together
+  ## at the end could fail if any sector errored. Now every branch returns the
+  ## same columns.
+
+  ct <- summary(m)$coeftable
+  data.table(
+    gtap         = gtap,
+    Matched_coef = if ("FTA_Matched" %in% rownames(ct)) ct["FTA_Matched", "Estimate"]   else NA_real_,
+    Matched_SE   = if ("FTA_Matched" %in% rownames(ct)) ct["FTA_Matched", "Std. Error"] else NA_real_,
+    Other_coef   = if ("FTA_Other"   %in% rownames(ct)) ct["FTA_Other",   "Estimate"]   else NA_real_,
+    Other_SE     = if ("FTA_Other"   %in% rownames(ct)) ct["FTA_Other",   "Std. Error"] else NA_real_,
+    tariff_coef = ct["ln_tariff", "Estimate"],      # beta_k  (= -sigma_k)
+    std_err     = ct["ln_tariff", "Std. Error"],
+    dist_coef   = if ("l_distw" %in% rownames(ct)) ct["l_distw", "Estimate"] else NA_real_,
+    n_hs6       = uniqueN(dt$hs6),
+    nobs        = m$nobs,
+    status      = "ok")
+
+}
+
+## ============================================================================
+## SECTION 4 -- Run Code
+## ============================================================================
+
+out_dir <- "Applications/country/Results_HS6_GTAP65_Gravity"
+
+## To try the script on just a couple of sectors first, un-comment the next line
+## and put the sector names you want inside it.
+# gtap_sectors <- c("b_t", "mvh")
+
+t_start <- Sys.time()
+
+for (g in gtap_sectors) {
+
+target <- file.path(out_dir, paste0("run_", g, ".rds"))
+if (file.exists(target)) next
+
+out <- estimate_gtap(g)
+
+tmp <- paste0(target, ".tmp")
+saveRDS(out, tmp)
+file.rename(tmp, target)
+
+cat(format(Sys.time(), "%H:%M"), "- finished", g, "->", out$status, "\n")
+
+gc()
+
+}
+
+t_end <- Sys.time()
+
+time_taken <- t_end-t_start
+
+print(time_taken)
+
+
+################## Stich Results Together ##########################
+
+file_list <- list.files(out_dir, pattern = "^run_.*\\.rds$", full.names = TRUE) # get list of files
+
+estimates_FTA_GTAP <- rbindlist(lapply(file_list, readRDS)) |> as_tibble()
+
+saveRDS(estimates_FTA_GTAP, file.path(out_dir, "estimates_FTA_GTAP_65.rds"))
+
+
+## ============================================================================
+## SECTION 5 -- Format Outputs
+## ============================================================================
+
+# z_crit_1pct <- 2.576   # two-sided normal critical value at the 1% level
+# z_crit_5pct <- 1.960   # 5% level
+#
+#
+# estimates_FTA_GTAP_65 <- estimates_FTA_GTAP_65 |>
+#   mutate(
+#     epsilon_pt   = 1 + tariff_coef,                         # trade elasticity
+#     t_stat_tariff       = abs(tariff_coef / std_err),
+#     sig_1pct_tariff     = !is.na(t_stat_tariff) & t_stat_tariff > z_crit_1pct,
+#     sig_5pct_tariff     = !is.na(t_stat_tariff) & t_stat_tariff > z_crit_5pct,
+#
+#
+#     pct_change_trade       = exp(Matched_coef)-1,                         # NOT AVE -
+#     AVE_FTA                = exp(Matched_coef/epsilon_pt)-1,                         # NOT AVE -
+#     t_stat_FTA             = abs(Matched_coef / Matched_SE),
+#     sig_1pct_FTA           = !is.na(t_stat_FTA) & t_stat_FTA > z_crit_1pct,
+#     sig_5pct_FTA           = !is.na(t_stat_FTA) & t_stat_FTA > z_crit_5pct,
+#
+#     flag_missing  = is.na(Matched_coef),                      # tariff dropped by estimator
+#     flag_negative = !is.na(Matched_coef) & Matched_coef < 0 & sig_1pct_FTA,  # wrong sign & significant
+#     flag_zero     = !is.na(Matched_coef) & !sig_1pct_FTA,         # insignificant -> set to zero
+#
+#     ## Stata: "replace sigma_ppml = 0 if t_ppml < 2.576" then epsilon = 1+sigma
+#     Matched_coef_zeroed = if_else(sig_1pct_FTA, Matched_coef, 0),
+#     pct_change_trade_zeroed = exp(Matched_coef_zeroed)-1,
+#     AVE_FTA_zeroed = exp(Matched_coef_zeroed/epsilon_pt)-1
+#   )
+
+################## SAVE AND RECALL ##########################
+
+# saveRDS(estimates_FTA_GTAP_65, "HS6 Level Version/HS6_FTA_GTAP_65_Outputs/estimates_FTA_GTAP_65.rds")
+
+# estimates_FTA_GTAP_65 <- readRDS("HS6 Level Version/HS6_FTA_GTAP_65_Outputs/estimates_FTA_GTAP_65.rds")
