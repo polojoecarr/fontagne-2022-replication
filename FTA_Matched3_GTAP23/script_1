@@ -1,0 +1,240 @@
+
+## ============================================================================ 
+## SECTION 1 -- ENVIRONMENT, PACKAGES AND FILE PATHS 
+## ============================================================================ 
+
+  library(data.table)  # fast CSV reading (fread) 
+
+  install.packages("fixest")
+  library(fixest)      # PPML estimator with fixed effects (fepois)
+  
+  install.packages("future")
+  library(future)      # parallel back-end 
+  
+  library(dplyr)       # data wrangling (tidyverse) 
+  library(tidyr)       # data wrangling (tidyverse) 
+  library(readr)       # write_csv (tidyverse) 
+  library(stringr)     # string helpers (tidyverse) 
+  library(ggplot2)     # Figure 1 (tidyverse) 
+
+## ------ Folder layout -------------------------------------------------------- 
+  
+## create paths to the data, and where the outputs will be stored.
+  
+project_root <- "Data/HS6 Data"
+  
+data_dir <- file.path(project_root) 
+
+## ============================================================================ 
+## SECTION 2 -- THE LIST OF PRODUCTS TO ESTIMATE 
+## ============================================================================ 
+
+hs6_codes_table <- read_csv("Data/hs6_codes_table.csv")
+
+## reorder table according to size of gtap sector -- this will help in case there isn't enough memory to run the larger sectors
+
+hs6_codes_table <- hs6_codes_table %>% 
+  group_by(GTAP_Sector) %>% 
+  mutate(sector_size = n()) %>% 
+  ungroup() %>% 
+  arrange(sector_size) %>% 
+  select(-sector_size)
+
+## vectorise information to feed into the loop function later
+
+gtap_groups <- split(hs6_codes_table$hs6_codes, hs6_codes_table$GTAP_Sector) # this splits the table into 46 vectors each corresponding to a GTAP sector - containing their HS6 codes.
+
+gtap_sectors <- unique(hs6_codes_table$GTAP_Sector) # unique names of sectors to feed through - smallest to largest
+
+
+##############################################################
+
+# Load the regression dataset
+
+regression_data <- readRDS("Applications/country/regression_data_country.rds") %>%
+  rename("i" = "exporter_iso3", "j" = "importer_iso3") %>% 
+  mutate(FTA_ = 1)
+
+## ============================================================================ 
+## SECTION 3 -- THE PER-PRODUCT ESTIMATOR (the paper's Equation 5) 
+## ============================================================================ 
+
+estimate_gtap <- function(gtap) { 
+  
+  hs6_list <- gtap_groups[[gtap]]
+  
+## read all the HS6 files in the GTAP sector and stack them together
+  
+read_one <- function(hs6) { 
+  
+  f <- file.path(data_dir, paste0("Sigma_HS6_", hs6, ".csv")) 
+  
+  dt <- tryCatch(fread(f, sep = ";"), error = function(e) NULL) 
+  
+  if (is.null(dt) || nrow(dt) == 0L)  return(NULL) 
+  
+  dt[, hs6 := hs6] }
+
+dt <- rbindlist(lapply(hs6_list, read_one), use.names = TRUE, fill = TRUE)
+
+if (is.null(dt) || nrow(dt) == 0L) 
+  return(data.table(
+                  gtap = gtap,
+                  FTA_coef = NA_real_, 
+                  FTA_SE = NA_real_,
+                  tariff_coef = NA_real_, 
+                  std_err = NA_real_, 
+                  dist_coef = NA_real_, 
+                  n_hs6 = 0L,
+                  nobs = 0L, 
+                  status = "read_error"))
+
+## merge the FTA / Matching dataset
+  
+  dt <- dt %>% 
+    left_join(regression_data, by = c("i", "j", "year")) %>% # note that the FTA will be the same value across all HS6 products in the GTAP sector
+    mutate(across(starts_with("FTA_"), ~ ifelse(is.na(.), 0, .))) %>% 
+    as.data.table() 
+  
+## cleaning
+  
+  dt[is.na(v), v := 0] 
+  
+  dt[, ln_tariff := log(ADV + 1)] 
+  
+  dt[, l_distw   := log(DISTW)] 
+  
+  dt[, flag := sum(v), by = i] 
+  
+  dt <- dt[flag != 0] # drop exporters that never ship
+  
+  if (nrow(dt) == 0L || length(unique(dt$ln_tariff)) < 2 || length(unique(dt$FTA_)) < 2) 
+    
+    return(data.table(
+                      gtap = gtap,
+                      FTA_coef = NA_real_, 
+                      FTA_SE = NA_real_,
+                      tariff_coef = NA_real_, 
+                      std_err = NA_real_, 
+                      dist_coef = NA_real_, 
+                      n_hs6 = uniqueN(dt$hs6),
+                      nobs = 0L, 
+                      status = "no_variation"))
+  
+  
+  ## Do the regression
+  
+   m <- tryCatch( 
+    fepois(v ~ FTA_ + ln_tariff + l_distw + COLONY + CONTIG + COMLANG_OFF | i^year^hs6 + j^year^hs6, data = dt, vcov = "hetero", warn = FALSE, notes = FALSE), error = function(e) NULL) 
+   
+   #######  NOTE  ##################
+   ### (1) trade = product level 
+   ### (2) tariffs = product level - but estimating an average impact within GTAP sector
+   ### (3) Gravity = GTAP level 
+   ### (2) FE = GTAP level 
+
+  if (is.null(m) || !("FTA_" %in% names(coef(m)))) 
+      return(data.table(
+                        gtap = gtap,
+                        FTA_coef = NA_real_, 
+                        FTA_SE = NA_real_,
+                        tariff_coef = NA_real_, 
+                        std_err = NA_real_, 
+                        dist_coef = NA_real_, 
+                        n_hs6 = uniqueN(dt$hs6),
+                        nobs = nrow(dt), 
+                        status = "dropped"))
+   
+## record regression results
+  
+  ct <- summary(m)$coeftable 
+  data.table( 
+    gtap         = gtap, 
+    FTA_coef    = if ("FTA_" %in% rownames(ct)) ct["FTA_", "Estimate"] else NA_real_, 
+    FTA_SE      = if ("FTA_" %in% rownames(ct)) ct["FTA_", "Std. Error"] else NA_real_, 
+    tariff_coef = ct["ln_tariff", "Estimate"],      # beta_k  (= -sigma_k) 
+    std_err     = ct["ln_tariff", "Std. Error"], 
+    dist_coef   = if ("l_distw" %in% rownames(ct)) ct["l_distw", "Estimate"] else NA_real_, 
+    nobs        = m$nobs, 
+    status      = "ok") 
+  
+} 
+
+## ============================================================================ 
+## SECTION 4 -- Run Code
+## ============================================================================ 
+
+out_dir <- "Applications/country/Results_HS6_GTAP65_Gravity"
+
+t_start <- Sys.time() 
+
+for (g in gtap_sectors) {
+  
+target <- file.path(out_dir, paste0("run_", g, ".rds"))
+if (file.exists(target)) next
+
+out <- estimate_gtap(g)
+
+tmp <- paste0(target, ".tmp")
+saveRDS(out, tmp)
+file.rename(tmp, target)
+
+cat(format(Sys.time(), "%H:%M"), "- finished", g, "->", out$status, "\n")
+
+gc()
+
+}
+
+t_end <- Sys.time() 
+
+time_taken <- t_end-t_start
+
+print(time_taken)
+
+
+################## Stich Results Together ##########################
+
+file_list <- list.files(out_dir, pattern = "^run_.*\\.rds$", full.names = TRUE) # get list of files
+
+estimates_FTA_GTAP <- rbindlist(lapply(file_list, readRDS)) |> as_tibble()
+
+saveRDS(estimates_FTA_GTAP, file.path(out_dir, "estimates_FTA_GTAP_65.rds"))
+
+
+## ============================================================================ 
+## SECTION 5 -- Format Outputs
+## ============================================================================ 
+
+# z_crit_1pct <- 2.576   # two-sided normal critical value at the 1% level 
+# z_crit_5pct <- 1.960   # 5% level
+# 
+# 
+# estimates_FTA_GTAP_65 <- estimates_FTA_GTAP_65 |> 
+#   mutate( 
+#     epsilon_pt   = 1 + tariff_coef,                         # trade elasticity
+#     t_stat_tariff       = abs(tariff_coef / std_err), 
+#     sig_1pct_tariff     = !is.na(t_stat_tariff) & t_stat_tariff > z_crit_1pct, 
+#     sig_5pct_tariff     = !is.na(t_stat_tariff) & t_stat_tariff > z_crit_5pct, 
+#     
+#     
+#     pct_change_trade       = exp(FTA_coef)-1,                         # NOT AVE - 
+#     AVE_FTA                = exp(FTA_coef/epsilon_pt)-1,                         # NOT AVE - 
+#     t_stat_FTA             = abs(FTA_coef / FTA_SE), 
+#     sig_1pct_FTA           = !is.na(t_stat_FTA) & t_stat_FTA > z_crit_1pct, 
+#     sig_5pct_FTA           = !is.na(t_stat_FTA) & t_stat_FTA > z_crit_5pct, 
+#     
+#     flag_missing  = is.na(FTA_coef),                      # tariff dropped by estimator 
+#     flag_negative = !is.na(FTA_coef) & FTA_coef < 0 & sig_1pct_FTA,  # wrong sign & significant 
+#     flag_zero     = !is.na(FTA_coef) & !sig_1pct_FTA,         # insignificant -> set to zero 
+#     
+#     ## Stata: "replace sigma_ppml = 0 if t_ppml < 2.576" then epsilon = 1+sigma 
+#     FTA_coef_zeroed = if_else(sig_1pct_FTA, FTA_coef, 0), 
+#     pct_change_trade_zeroed = exp(FTA_coef_zeroed)-1,
+#     AVE_FTA_zeroed = exp(FTA_coef_zeroed/epsilon_pt)-1
+#   ) 
+
+################## SAVE AND RECALL ##########################
+
+# saveRDS(estimates_FTA_GTAP_65, "HS6 Level Version/HS6_FTA_GTAP_65_Outputs/estimates_FTA_GTAP_65.rds")
+
+# estimates_FTA_GTAP_65 <- readRDS("HS6 Level Version/HS6_FTA_GTAP_65_Outputs/estimates_FTA_GTAP_65.rds")
